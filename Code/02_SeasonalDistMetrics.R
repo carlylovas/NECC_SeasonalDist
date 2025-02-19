@@ -59,7 +59,6 @@ seasonal_dist <- seas_cob %>%
 
 point_dist <- function(df){
   temp <- sf::st_as_sf(df,coords=c("avg_lon","avg_lat"), crs=4326, remove=FALSE)
-#   temp <- sf::st_transform(temp, crs = 4326)
   temp <- sf::st_transform(temp, crs = 32619)
   out  <- sf::st_distance(temp$geometry)[1,2]
   return(out)
@@ -89,6 +88,7 @@ write_rds(seasonal_dist_out, here("Data","seasonal_dist.rds"))
 
 # Species summary plots ---- AA stopped here!
 # plotting rate of change in seasonal distance
+
 seasonal_dist %>% 
   mutate(z = estimate > 0) %>% 
   ggplot()+
@@ -102,8 +102,10 @@ seasonal_dist %>%
   scale_color_gmri()+
   ylim(c(-4,4)) +
   geom_hline(yintercept = 0, linetype = 2, linewidth = 0.5, color = "black")+
+
   ylab("Rate of change (km/year)") + ggtitle("Changes in seasonal distance") 
 
+## Species profile plots 
 # plot the distance between centroids each year for each species 
 seasonal_dist %>% 
   mutate(plot = map2(data, comname, function(x,y){
@@ -113,7 +115,6 @@ seasonal_dist %>%
       ggtitle(str_to_sentence(comname)) +
       xlab("Year") + ylab ("Distance between fall and spring centroids (km)")
   })) -> seasonal_dist
-
 
 seasonal_dist %>% 
   select(comname, data) %>% 
@@ -159,9 +160,8 @@ with_season %>%
         return(plot)
       })) -> with_season
 
-    bsb_map <- with_season$map[[11]]
-    ggsave("bsb_map.png", bsb_map)
-
+# bsb_map <- with_season$map[[11]]
+# ggsave("bsb_map.png", bsb_map)
 
 with_season %>% 
   mutate(time_series = map2(data, comname, function(x,y){
@@ -180,7 +180,6 @@ with_season %>%
   })) -> with_season
 
 # with_season$time_series[[40]]
-
 
 grouped_quantiles <- function(clean_survey, ...){
   clean_survey %>% 

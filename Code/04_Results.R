@@ -1,4 +1,5 @@
-
+# Conceptual figure
+## contract
 contracting <- data.frame(year = seq(1970,2020, by = 10), spring = seq(38, 41, by = 0.6), fall = 42) %>%
   pivot_longer(cols = spring:fall, names_to = "season", values_to = "lat")
 
@@ -57,4 +58,5 @@ ggplot(stable) +
   theme_gmri(plot.subtitle = element_text(size = 10)) -> plot4
 
 
-patchwork::wrap_plots(plot1, plot2, plot3, plot4, ncol = 2)
+patch <- patchwork::wrap_plots(plot1, plot2, plot3, plot4, ncol = 2)
+ggsave(here("Figures", "concept_fig.png"), patch, width = 11, height = 8.5, units = "in")
