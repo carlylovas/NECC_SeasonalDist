@@ -152,6 +152,8 @@ seasonal_dist_out <- seasonal_dist |>
     unnest(cols = c(data))
 write_rds(seasonal_dist_out, here("Data","seasonal_dist.rds"))
 
+rm(list=ls())
+# ------------------------------------------------------------------------- #
 # Species summary plots ---- AA stopped here!
 # plotting rate of change in seasonal distance
 

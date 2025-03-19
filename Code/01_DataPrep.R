@@ -117,3 +117,5 @@ delta_year_day<- year_day |>
   mutate(delta_year_day = (Fall-Spring))
 
 saveRDS(delta_year_day, here::here("Data/trawl_yearday_diff.rds"))
+
+rm(list=ls())
