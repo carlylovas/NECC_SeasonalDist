@@ -16,15 +16,15 @@ library(shiny)
 dat <- readRDS(here::here("Data/dat_clean.rds"))
 
 # Calculate center of biomass metrics by season ----
-center_bio <- function(clean_survey, ...){
-  clean_survey %>%
+center_bio <- function(dat, ...){
+  dat %>%
     group_by(comname, ...) %>%
     summarise(
       # Un-weighted averages
       total_biomass   = sum(total_biomass_kg),
       avg_biomass     = mean(total_biomass_kg),
       biomass_sd      = sd(total_biomass_kg),
-      avg_lat         = weightedMean(lat, w = total_biomass_kg, na.rm = T),
+      avg_lat         = weightedMean(lat, w = total_biomass_kg, na.rm = T),  
       avg_lon         = weightedMean(lon, w = total_biomass_kg, na.rm = T),
       .groups = "drop")
 }
@@ -32,10 +32,10 @@ center_bio <- function(clean_survey, ...){
 seas_cob <- center_bio(dat, year, season)
 
 # Fit linear model to get trend in latitude and longitude over time ----
-seas_cob<- seas_cob |> 
-  group_by(comname) |> 
+seas_cob <- seas_cob |> 
+  group_by(comname, season) |> 
   nest() |> 
-  mutate(lat = map(data, function(x){lm(avg_lat ~ year, data = x) |> 
+  mutate(lat = map(data, function(x){lm(avg_lat ~ year, data = x) |> # 5-year rolling mean?
                       tidy() |> 
                       filter(term == "year")}),
          lon = map(data, function(x){lm(avg_lon ~ year, data = x) |> 
@@ -44,10 +44,76 @@ seas_cob<- seas_cob |>
 
 # isolate coefficients 
 seas_cob_coeffs <- seas_cob |> 
-  select(!data) %>%
-  pivot_longer(cols = lat:lon, names_to = "variable", values_to = "data") %>% 
-  unnest(data) %>% 
-  select(comname, variable, estimate, p.value)
+  select(!data) |>
+  pivot_longer(cols = lat:lon, names_to = "variable", values_to = "data") |>
+  unnest(data) |>
+  select(comname, season, variable, estimate, p.value)
+
+# define movement trends and categories
+seas_cob_coeffs |>
+  filter(variable == "lat") |>
+  mutate(signif   = ifelse(p.value <= 0.05, "true", "false"),
+         movement = ifelse(estimate > 0, "+", "-")) |>
+  select(!p.value) -> seas_trends
+  
+seas_trends |> 
+  filter(signif == "true" & movement == "+") |>
+  mutate(trend = "northward") %>%
+  full_join(seas_trends|>
+              filter(signif == "true" & movement == "-") |>
+              mutate(trend = "southward")) |>
+  full_join(seas_trends|>
+              filter(signif == "false" & movement == "-" | signif == "false" & movement == "+") |>
+              mutate(trend = "stable")) %>%
+  arrange(comname, season) -> seas_trends
+  
+seas_trends |> 
+  select(comname, season, estimate)|>
+  pivot_wider(names_from = season, values_from = estimate) |>
+  group_by(comname)|> 
+  summarise(difference = `Fall`-`Spring`) |> 
+  left_join(seas_trends |> ungroup() |> select(comname, season, signif)) |>
+  pivot_wider(names_from = season, values_from = signif) -> seas_diff
+
+## contracting
+seas_diff |>
+  filter(Fall == "false" & Spring == "true" & difference < 0) |> 
+  select(comname)|>
+  mutate(category = "contracting") -> contracting 
+
+## marching
+### fall > 0 < spring & 0 > fall-spring < 1
+seas_diff|>
+  filter(Fall == "true" & Spring == "true" & abs(difference) < 1) |> # figure out this threshold
+  select(comname)|>
+  mutate(category = "marching")-> marching 
+
+## expanding
+### fall-spring > 0 & fall > 0 > spring
+seas_trends|> # fix this
+  ungroup() |>
+  select(comname, season, estimate) |>
+  pivot_wider(names_from = season, values_from = estimate) |>
+  filter(Fall > 0 & Spring < 0) |>
+  select(comname) |>
+  left_join(seas_diff) |>
+  filter(!Fall == "false" |!Spring == "false") |>
+  select(comname) |>
+  mutate(category = "expanding") -> expanding
+
+## stable 
+seas_diff |> 
+  filter(Fall == "false" & Spring == "false") |>
+  select(comname) |>
+  mutate(category = "stable") -> stable
+
+trends <- contracting %>%
+  full_join(marching) %>%
+  full_join(expanding) %>% 
+  full_join(stable) 
+
+write_rds(trends, here("Data", "movement_categories.rds"))
+### haddock, northern sea robin, northern shortfin squid, and smooth skate fall out...
 
 
 # Calculating distance between spring and fall centroids ----
@@ -59,7 +125,6 @@ seasonal_dist <- seas_cob %>%
 
 point_dist <- function(df){
   temp <- sf::st_as_sf(df,coords=c("avg_lon","avg_lat"), crs=4326, remove=FALSE)
-#   temp <- sf::st_transform(temp, crs = 4326)
   temp <- sf::st_transform(temp, crs = 32619)
   out  <- sf::st_distance(temp$geometry)[1,2]
   return(out)
@@ -87,8 +152,11 @@ seasonal_dist_out <- seasonal_dist |>
     unnest(cols = c(data))
 write_rds(seasonal_dist_out, here("Data","seasonal_dist.rds"))
 
+rm(list=ls())
+# ------------------------------------------------------------------------- #
 # Species summary plots ---- AA stopped here!
 # plotting rate of change in seasonal distance
+
 seasonal_dist %>% 
   mutate(z = estimate > 0) %>% 
   ggplot()+
@@ -102,8 +170,10 @@ seasonal_dist %>%
   scale_color_gmri()+
   ylim(c(-4,4)) +
   geom_hline(yintercept = 0, linetype = 2, linewidth = 0.5, color = "black")+
+
   ylab("Rate of change (km/year)") + ggtitle("Changes in seasonal distance") 
 
+## Species profile plots 
 # plot the distance between centroids each year for each species 
 seasonal_dist %>% 
   mutate(plot = map2(data, comname, function(x,y){
@@ -113,7 +183,6 @@ seasonal_dist %>%
       ggtitle(str_to_sentence(comname)) +
       xlab("Year") + ylab ("Distance between fall and spring centroids (km)")
   })) -> seasonal_dist
-
 
 seasonal_dist %>% 
   select(comname, data) %>% 
@@ -159,9 +228,8 @@ with_season %>%
         return(plot)
       })) -> with_season
 
-    bsb_map <- with_season$map[[11]]
-    ggsave("bsb_map.png", bsb_map)
-
+# bsb_map <- with_season$map[[11]]
+# ggsave("bsb_map.png", bsb_map)
 
 with_season %>% 
   mutate(time_series = map2(data, comname, function(x,y){
@@ -180,7 +248,6 @@ with_season %>%
   })) -> with_season
 
 # with_season$time_series[[40]]
-
 
 grouped_quantiles <- function(clean_survey, ...){
   clean_survey %>% 
