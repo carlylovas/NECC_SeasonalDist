@@ -38,76 +38,12 @@ seas_cob <- center_bio(dat, year, season)
 # Fit linear mixed model to get trend in latitude and longitude over time ----
 seas_cob <- seas_cob |> 
   left_join(delta_year_day) |> 
-  select(comname, year, season, avg_lat, delta_year_day)
+  select(comname, year, season, avg_lat, avg_lon, delta_year_day)
 
 mod <- glmmTMB(avg_lat ~ year*comname*season, data = seas_cob, REML = T)
 
 slopes_output <- slopes(mod, variables = "year", by = c("comname", "season"), type = "response")
 
-# define movement trends and categories
-seas_cob_coeffs |>
-  filter(variable == "lat") |>
-  mutate(signif   = ifelse(p.value <= 0.05, "true", "false"),
-         movement = ifelse(estimate > 0, "+", "-")) |>
-  select(!p.value) -> seas_trends
-
-seas_trends |> 
-  filter(signif == "true" & movement == "+") |>
-  mutate(trend = "northward") %>%
-  full_join(seas_trends|>
-              filter(signif == "true" & movement == "-") |>
-              mutate(trend = "southward")) |>
-  full_join(seas_trends|>
-              filter(signif == "false" & movement == "-" | signif == "false" & movement == "+") |>
-              mutate(trend = "stable")) %>%
-  arrange(comname, season) -> seas_trends
-
-seas_trends |> 
-  select(comname, season, estimate)|>
-  pivot_wider(names_from = season, values_from = estimate) |>
-  group_by(comname)|> 
-  summarise(difference = `Fall`-`Spring`) |> 
-  left_join(seas_trends |> ungroup() |> select(comname, season, signif)) |>
-  pivot_wider(names_from = season, values_from = signif) -> seas_diff
-
-## contracting
-seas_diff |>
-  filter(Fall == "false" & Spring == "true" & difference < 0) |> 
-  select(comname)|>
-  mutate(category = "contracting") -> contracting 
-
-## marching
-### fall > 0 < spring & 0 > fall-spring < 1
-seas_diff|>
-  filter(Fall == "true" & Spring == "true" & abs(difference) < 1) |> # figure out this threshold
-  select(comname)|>
-  mutate(category = "marching")-> marching 
-
-## expanding
-### fall-spring > 0 & fall > 0 > spring
-seas_trends|> # fix this
-  ungroup() |>
-  select(comname, season, estimate) |>
-  pivot_wider(names_from = season, values_from = estimate) |>
-  filter(Fall > 0 & Spring < 0) |>
-  select(comname) |>
-  left_join(seas_diff) |>
-  filter(!Fall == "false" |!Spring == "false") |>
-  select(comname) |>
-  mutate(category = "expanding") -> expanding
-
-## stable 
-seas_diff |> 
-  filter(Fall == "false" & Spring == "false") |>
-  select(comname) |>
-  mutate(category = "stable") -> stable
-
-trends <- contracting %>%
-  full_join(marching) %>%
-  full_join(expanding) %>% 
-  full_join(stable) 
-
-write_rds(trends, here("Data", "movement_categories.rds"))
 ### haddock, northern sea robin, northern shortfin squid, and smooth skate fall out...
 
 
@@ -147,4 +83,88 @@ seasonal_dist_out <- seasonal_dist |>
   unnest(cols = c(data))
 write_rds(seasonal_dist_out, here("Data","seasonal_dist.rds"))
 
-rm(list=ls())
+# rm(list=ls())
+
+## -------------------------------------------------------------------- ##
+# distance along coast...? 
+coastdistdat <- readRDS(here("Data","coastdistdat.rds"))
+get_length <- function(df, distdf = coastdistdat){
+  tmp <- distdf %>% 
+    mutate(abs.diff.x2 = abs(x-df$avg_lon)^2,
+           abs.diff.y2 = abs(y-df$avg_lat)^2,
+           abs.diff.xy = sqrt(abs.diff.x2 + abs.diff.y2
+           ))  %>% 
+    filter(abs.diff.xy == min(abs.diff.xy)) %>%
+    dplyr::select(lengthfromhere) %>%
+    pull()
+  return(tmp)
+}
+
+seas_cob |>
+  group_by(comname, season, year) |>
+  nest() |>
+  mutate(coastdist = map_dbl(data, get_length),
+         coastdist_km = coastdist/1000) |>
+  select(comname, season, year, coastdist_km) -> coastdist_km
+                             
+# linear mod? 
+coastdist_km |>
+  group_by(comname) |> 
+  nest() |>
+  mutate(trends = map(data, function(x){
+    mod <- lm(coastdist_km~year*season, data = x)
+    slopes <- slopes(mod, variables = "year", by = "season", type = "response") |>
+      select(!term) |>
+      rename("term" = "season")
+    return(slopes)
+    })) |>
+  select(!data) |>
+  unnest(trends) -> seasonal_trends # name tbd
+
+coastdist_km |>
+  group_by(comname) |> 
+  nest() |>
+  mutate(outputs = map(data, function(x){
+    mod <- lm(coastdist_km~year*season, data = x)
+    slopes <- slopes(mod, variables = "year", by = "season", type = "response", hypothesis = "pairwise")
+    return(slopes)
+  })) |>
+  select(!data) |>
+  unnest(outputs) -> difference_in_season
+
+seasonal_trends |>
+  full_join(difference_in_season) |> 
+  arrange(comname) -> all_outputs
+
+# define movement trends and categories
+all_outputs |>
+  select(comname, term, estimate, p.value) |>
+  mutate(signif   = ifelse(p.value <= 0.05, "true", "false"),
+         movement = ifelse(estimate > 0, "+", "-")) -> output_trends
+
+output_trends |> 
+  mutate(trend = case_when(
+    term %in% c("Fall", "Spring") & signif == "true" & movement == "+" ~ "northward",
+    term %in% c("Fall", "Spring") & signif == "true" & movement == "-" ~ "southward",
+    term == "Fall - Spring" & signif == "true" & movement == "+" ~ "more different",
+    term == "Fall - Spring" & signif == "true" & movement == "-" ~ "less different",
+    signif == "false" ~ "stable")) -> all_output_trends
+  
+# movement categories
+all_output_trends |>
+  select(comname, term, trend) |>
+  pivot_wider(names_from = "term", values_from = "trend") |>
+  mutate(category = case_when(
+    # contracting
+    `Fall` %in% c("stable", "southward") & `Spring` == "northward" ~ "contracting",
+    `Fall` == "southward" & `Spring` == "stable" ~ "contracting",
+    # marching
+    `Fall` == "northward" & `Spring` == "northward" & `Fall - Spring` %in% c("stable", "less different") ~ "marching",
+    `Fall` == "southward" & `Spring` == "southward" & `Fall - Spring` %in% c("stable", "less different") ~ "marching",
+    # expanding 
+    `Fall` == "northward" & `Spring` %in% c("southward", "stable") & `Fall - Spring` %in% c("stable", "more different") ~ "expanding",
+    `Fall` == "stable" & `Spring` == "southward" & `Fall - Spring` %in% c("stable", "more different") ~ "expanding",
+    # stable
+    `Fall` == "stable" & `Spring` == "stable" ~ "stable"
+  )) -> categories
+
