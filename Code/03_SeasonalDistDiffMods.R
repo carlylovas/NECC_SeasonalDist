@@ -50,6 +50,9 @@ dat_mod <- dat |>
     filter(!SOE.24 == "Benthos") %>%
     mutate(year_fac = factor(year))
 
+# save out for bart
+# write_rds(dat_mod, here("Data", "mod_Bart.rds"))
+
 # add movement categories
 mov <-  readRDS(here::here("Data/movement_categories.rds"))
 
