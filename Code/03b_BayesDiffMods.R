@@ -74,7 +74,6 @@ nd2$ytilda <- apply(predictions, MARGIN = 2, median) # Same housekeeping to get 
 nd2$.lower <- apply(predictions, 2, quantile,  0.025)
 nd2$.upper <- apply(predictions, 2, quantile, 0.975)
 
-
 # This is a figure paneled by functional group w/ only the CI's for functional group.
 ggplot(nd, aes(x = year, y = ytilda))+
   geom_line(aes(color = comname), show.legend = F)+
@@ -84,6 +83,9 @@ ggplot(nd, aes(x = year, y = ytilda))+
   theme_bw()+
   labs(y = "Predicted distance between seasonal centroids", x = "")
 ggsave("Figures/FG_temporaltrends.png")
+
+# CSL: saving out dataframe for plotting
+write_rds(nd2, here("Data", "functional_group_trends.rds"))
 
 # This one I imagine going into the supplement, but it the same figure but faceted by species and includes the CI's for each species specific trend.
 ggplot(nd, aes(x = year, y = ytilda))+
@@ -113,3 +115,10 @@ out %>%
   labs(x = "Change in seasonal distance over time", y = "Species")+
   theme_classic()
 ggsave("Figures/Species_coefplot.png")
+
+# CSL: saving out dataframe to use for plots
+out %>%
+  group_by(species, functional_group) %>%
+  tidybayes::median_qi(`r_functional_group:comname`, .width = c(0.75, 0.95)) -> bayes_coeff
+
+write_rds(bayes_coeff, here("Data", "bayes_coeff.rds"))

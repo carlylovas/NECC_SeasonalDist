@@ -14,7 +14,8 @@ library(shiny)
 library(marginaleffects)
 
 # Load cleaned data ----
-dat <- readRDS(here::here("Data/dat_clean.rds"))
+dat <- readRDS(here::here("Data/dat_clean.rds")) |>
+  filter(!year %in% c(2017,2020))
 
 # Calculate center of biomass metrics by season ----
 center_bio <- function(dat, ...){
@@ -54,6 +55,9 @@ seas_cob |>
          coastdist_km = coastdist/1000) |>
   select(comname, season, year, coastdist_km) -> coastdist_km
 
+# save out for plotting
+write_rds(coastdist_km, here("Data", "seas_cob.rds"))
+
 # Linear model with interaction ----
 coastdist_km |>
   group_by(comname) |> 
@@ -61,8 +65,8 @@ coastdist_km |>
   mutate(trends = map(data, function(x){
     mod <- lm(coastdist_km~year*season, data = x)
     slopes <- slopes(mod, variables = "year", by = "season", type = "response") |>
-      select(!term) |>
-      rename("term" = "season")
+    select(!term) |>
+    rename("term" = "season")
     return(slopes)
   })) |>
   select(!data) |>
