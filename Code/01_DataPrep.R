@@ -24,6 +24,10 @@ spp_classes <- readr::read_csv(here::here("Data/sppclass.csv"),
     col_types = readr::cols()
 )
 spp_classes <- janitor::clean_names(spp_classes)
+
+# LOBSTER PROBLEM
+spp_classes$scientific_name[which(spp_classes$svspp == 301)] <- "Homarus americanus"
+
 spp_classes <- dplyr::mutate(
     .data = spp_classes, comname = stringr::str_to_lower(common_name),
     scientific_name = stringr::str_to_lower(scientific_name)
@@ -99,9 +103,25 @@ tow_seas_spp <- tow_spp |>
     summarise(years = n_distinct(year)) |>
     filter(years >= cut)
 
-# Summaries and saving prepped data ----
+# Now cut 2017 and 2020
 dat_out <- dat_clean |>
+    filter(!year %in% c(2017, 2020))
+
+
+# Summaries and saving prepped data ----
+dat_out <- dat_out |>
     filter(comname %in% tow_seas_spp$comname)
+
+# Quick time series by season/species of total catch
+ts_dat <- dat_out |>
+    group_by(comname, year, season) |>
+    summarize("total" = sum(total_biomass_kg))
+
+ggplot() +
+    geom_point(data = ts_dat, aes(x = year, y = total, color = season)) +
+    geom_line(data = ts_dat, aes(x = year, y = total, color = season)) +
+    facet_wrap(~comname, scales = "free_y") +
+    theme_bw()
 
 saveRDS(dat_out, here::here("Data/dat_clean.rds"))
 
@@ -110,12 +130,12 @@ year_day <- dat_out |>
     mutate(year_day = lubridate::yday(est_towdate)) |>
     select(year, season, year_day, id)
 
-delta_year_day<- year_day |> 
-  group_by(year, season) |>
-  summarise(median = median(year_day)) |>
-  pivot_wider(names_from = "season", values_from = "median") |> 
-  mutate(delta_year_day = (Fall-Spring))
+delta_year_day <- year_day |>
+    group_by(year, season) |>
+    summarise(median = median(year_day)) |>
+    pivot_wider(names_from = "season", values_from = "median") |>
+    mutate(delta_year_day = (Fall - Spring))
 
 saveRDS(delta_year_day, here::here("Data/trawl_yearday_diff.rds"))
 
-rm(list=ls())
+rm(list = ls())
