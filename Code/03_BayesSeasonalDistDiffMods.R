@@ -9,6 +9,7 @@ library(glmmTMB)
 library(tidybayes)
 library(ggrepel)
 
+fit <- FALSE
 # Load seasonal distance data ----
 dat <- readRDS(here::here("Data/seasonal_dist.rds")) # Generated in 02_SeasonalDistMetrics.R
 
@@ -60,21 +61,24 @@ summary(dat_mod)
 t <- dat_mod |> filter(is.na(dist_km))
 t
 
-# Fit the model using brms (takes about an hour on my computer)
-mod_brms <- brm(
-    dist_km ~ delta_year_day + (year.cont | functional_group / comname),
-    data = dat_mod,
-    family = Gamma(link = "log"),
-    chains = 4, # Number of MCMC chains (adjust based on your computational resources)
-    cores = 4, # Number of cores (adjust as needed)
-    iter = 5000, # Number of iterations per chain
-    warmup = 2000, # Number of warmup iterations
-    # sample_prior = "only",
-    control = list(adapt_delta = 0.999, max_treedepth = 15)
-)
+if (fit) { # Fit the model using brms (takes about an hour on my computer)
+    mod_brms <- brm(
+        dist_km ~ delta_year_day + (year.cont | functional_group / comname),
+        data = dat_mod,
+        family = Gamma(link = "log"),
+        chains = 4, # Number of MCMC chains (adjust based on your computational resources)
+        cores = 4, # Number of cores (adjust as needed)
+        iter = 5000, # Number of iterations per chain
+        warmup = 2000, # Number of warmup iterations
+        # sample_prior = "only",
+        control = list(adapt_delta = 0.999, max_treedepth = 15)
+    )
 
-write_rds(mod_brms, file = "Data/seasonal_dist_brms.rds", compress = "gz") # Write out the model file to disk.
-# mod_brms <- readRDS("Data/mod_brms1.rds") # Read it in here if you don't want to run the model
+    write_rds(mod_brms, file = "Data/seasonal_dist_brms.rds", compress = "gz") # Write out the model file to disk.
+    # mod_brms <- readRDS("Data/mod_brms1.rds") # Read it in here if you don't want to run the model
+} else {
+    mod_brms <- readRDS("Data/seasonal_dist_brms.rds") # Read in the model if you don't want to run it.
+}
 
 prior_summary(mod_brms) # This is the summary of the priors for the model.
 
@@ -146,24 +150,55 @@ nd2 <- nd2 |>
 
 
 # This is a figure paneled by functional group w/ only the CI's for functional group.
-ggplot(nd, aes(x = year, y = ytilda)) +
+labeled_plot <- ggplot(nd, aes(x = year, y = ytilda)) +
     geom_line(aes(color = comname), show.legend = F) +
     geom_text_repel(
         data = label_df,
         aes(label = species_id),
-        direction = "y",
-        # nudge_x = 1,
-        size = 1.5,
-        segment.color = "grey80",
-        max.overlaps = 12
+        hjust = 0, # left-aligned
+        direction = "y", # repel vertically
+        nudge_x = 5, # push labels outside plot area
+        size = 2,
+        segment.color = "grey20",
+        max.overlaps = 12,
+        segment.color = "black",
+        segment.linetype = "dotted", # 👈 controls the line style
+        segment.size = 0.3
     ) +
     geom_line(data = nd2, aes(x = year, y = ytilda), linewidth = 1) +
     geom_ribbon(data = nd2, aes(x = year, y = ytilda, ymin = .lower, ymax = .upper), alpha = 0.1) +
     facet_wrap(~functional_group) +
     theme_bw() +
-    labs(y = "Predicted distance between seasonal centroids", x = "")
+    labs(y = "Predicted distance between seasonal centroids", x = "") +
+    coord_cartesian(xlim = c(1970, 2025), clip = "off") + # 🔑 allows labels to go outside the panel
+    theme(plot.margin = margin(5.5, 50, 5.5, 5.5)) # 👈 adds right margin space
 
-ggsave("Figures/FG_temporaltrends.png")
+
+label_df <- label_df |>
+    mutate(label_plot = paste0(species_id, ": ", comname)) |>
+    group_by(functional_group) |>
+    arrange(ytilda, .by_group = TRUE) |> # or arrange(ytilda) for ascending
+    mutate(y_pos = row_number()) |>
+    ungroup()
+
+label_table <- ggplot(label_df, aes(x = 1, y = y_pos)) +
+    geom_text(aes(label = label_plot, color = comname), hjust = 1, size = 3.2) +
+    facet_wrap(~functional_group, scales = "free_y") +
+    coord_cartesian(clip = "off") +
+    theme_minimal() +
+    theme(
+        legend.position = "none",
+        axis.text = element_blank(),
+        axis.ticks = element_blank(),
+        axis.title = element_blank(),
+        panel.grid = element_blank(),
+        plot.margin = margin(5.5, 5.5, 5.5, 5.5),
+        strip.text = element_blank()
+    ) +
+    scale_x_continuous(expand = expansion(mult = c(0.05, 0))) # pull text to left
+
+out <- labeled_plot / label_table + plot_layout(heights = c(1, 0.5))
+ggsave("Figures/FG_temporaltrends.png", out, width = 11, height = 11, dpi = )
 
 # This one I imagine going into the supplement, but it the same figure but faceted by species and includes the CI's for each species specific trend.
 ggplot(nd, aes(x = year, y = ytilda)) +
