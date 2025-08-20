@@ -6,6 +6,7 @@ library(tidyverse)
 library(rstanarm)
 library(glmmTMB)
 library(tidybayes)
+library(plotly)
 
 # Load data with biomass weighted cog lat/lon ----
 dat <- readRDS(here::here("Data/seasonal_dist.rds")) # Generated in 02_SeasonalDistMetrics.R
@@ -21,6 +22,7 @@ dat <- dat |>
 # species_groupings <- ecodata::species_groupings |>
 #   mutate(comname = tolower(COMNAME))
 load(here::here("Data/SOE_species_list_24.RData"))
+write_csv(species, here::here("Data/SOE_species_list_24.csv"))
 species_groupings <- species |>
     tibble() |>
     janitor::clean_names()
@@ -31,17 +33,19 @@ soe_24 <- species_groupings |>
     filter(comname %in% dat$comname) |>
     distinct()
 
+table(soe_24$soe_24)
 # One missing?
 unique(dat$comname)[!unique(dat$comname) %in% soe_24$comname]
 
-add <- data.frame(comname = "windowpane flounder", soe_24 = "Benthivore")
+add <- data.frame(comname = "windowpane flounder", soe_24 = "benthivore")
 
 soe_24 <- bind_rows(soe_24, add)
 
 dat_mod <- dat |>
     left_join(soe_24) |>
-    filter(!soe_24 == "Benthos") |>
+    filter(!soe_24 == "benthos") |>
     mutate(season = factor(season, levels = c("Fall", "Spring")))
+table(dat_mod$soe_24)
 
 
 # Some final naming/tidying
@@ -61,33 +65,37 @@ dat_mod <- dat_mod |>
     group_by(comname) |>
     nest()
 
-dat_mod <- dat_mod |>
-    mutate(
-        model_lat = map(data, ~ brm(
-            avg_lat ~ year.cont * season,
-            data = .x,
-            family = gaussian(),
-            chains = 4,
-            cores = 4,
-            iter = 5000,
-            warmup = 1000,
-            control = list(adapt_delta = 0.999, max_treedepth = 15)
-        )),
-        model_lon = map(data, ~ brm(
-            avg_lon ~ year.cont * season,
-            data = .x,
-            family = gaussian(),
-            chains = 4,
-            cores = 4,
-            iter = 5000,
-            warmup = 1000,
-            control = list(adapt_delta = 0.999, max_treedepth = 15)
-        ))
-    )
+fit_mod <- TRUE
+if (fit_mod) {
+    dat_mod <- dat_mod |>
+        mutate(
+            model_lat = map(data, ~ brm(
+                avg_lat ~ year.cont * season,
+                data = .x,
+                family = gaussian(),
+                chains = 4,
+                cores = 4,
+                iter = 5000,
+                warmup = 1000,
+                control = list(adapt_delta = 0.999, max_treedepth = 15)
+            )),
+            model_lon = map(data, ~ brm(
+                avg_lon ~ year.cont * season,
+                data = .x,
+                family = gaussian(),
+                chains = 4,
+                cores = 4,
+                iter = 5000,
+                warmup = 1000,
+                control = list(adapt_delta = 0.999, max_treedepth = 15)
+            ))
+        )
+    saveRDS(dat_mod, here::here("Results/seasonal_centroid_models.rds"))
+} else {
+    dat_mod <- readRDS(here::here("Results/seasonal_centroid_models.rds"))
+}
 
-# Get posterior draws
-library(tidybayes)
-
+# Results summary
 # Step 1: Extract draws
 dat_mod <- dat_mod %>%
     mutate(
@@ -152,6 +160,9 @@ dat_plot <- dat_plot %>%
         shift_pattern = factor(shift_pattern, levels = c("Stable", "Same rate shift", "Converging", "Diverging"), labels = c("Stable", "Marching", "Converging", "Diverging"))
     )
 
+# save it for later
+write_csv(dat_plot, here::here("Results/seasonal_centroid_mod_summary.csv"))
+
 ggplot(dat_plot, aes(x = fall_mean, y = spring_mean, color = mechanism, shape = soe_24_clean)) +
     geom_hline(yintercept = 0, linetype = "dashed", color = "gray") +
     geom_vline(xintercept = 0, linetype = "dashed", color = "gray") +
@@ -203,3 +214,39 @@ ggplot(dat_plot, aes(x = fall_mean, y = spring_mean, color = mechanism, shape = 
     ) +
     theme_minimal()
 ggsave("Figures/SpeciesSeasonalTrends_CaseStudies.jpg")
+
+# Interactive plot
+# Base ggplot
+p <- ggplot(dat_plot, aes(
+    x = fall_mean, y = spring_mean,
+    color = mechanism, shape = soe_24_clean,
+    text = paste0(
+        "Species: ", comname, "<br>",
+        "Functional group: ", functional_group, "<br>",
+        "Fall mean: ", fall_mean, "<br>",
+        "Spring mean: ", spring_mean, "<br>",
+        "Gap: ", gap_mean, "<br>",
+        "Shift pattern: ", shift_pattern, "<br>",
+        "Mechanism: ", mechanism
+    )
+)) +
+    geom_hline(yintercept = 0, linetype = "dashed", color = "gray") +
+    geom_vline(xintercept = 0, linetype = "dashed", color = "gray") +
+    geom_abline(slope = 1, intercept = 0, linetype = "dotted", color = "black") +
+    geom_errorbar(aes(ymin = spring_lower, ymax = spring_upper), alpha = 0.4) +
+    geom_errorbarh(aes(xmin = fall_lower, xmax = fall_upper), alpha = 0.4) +
+    geom_point(size = 2.5) +
+    facet_wrap(~shift_pattern) +
+    labs(
+        x = "Fall trend (° latitude/year)",
+        y = "Spring trend (° latitude/year)",
+        title = "Seasonal centroid shift patterns by species",
+        subtitle = "With 95% credible intervals"
+    ) +
+    theme_minimal()
+
+# Convert to interactive plotly
+p_interactive <- ggplotly(p, tooltip = "text")
+
+# Display interactive plot
+p_interactive

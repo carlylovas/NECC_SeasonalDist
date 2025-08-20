@@ -11,6 +11,9 @@ library(patchwork)
 library(broom)
 library(rmarkdown)
 library(shiny)
+library(rnaturalearth)
+library(rnaturalearthhires)
+library(sf)
 
 # Load and preliminary cleaning of raw data ----
 survdat <- readRDS(here::here("Data/survdat_lw.rds"))$survdat |>
@@ -139,3 +142,54 @@ delta_year_day <- year_day |>
 saveRDS(delta_year_day, here::here("Data/trawl_yearday_diff.rds"))
 
 rm(list = ls())
+
+# Quick sample map of the data and timeseries of median trawl day by season
+dat <- readRDS(here::here("Data/dat_clean.rds"))
+
+delta_year_day <- readRDS(here::here("Data/trawl_yearday_diff.rds"))
+
+# --- US states ---
+us_states <- ne_states(country = "united states of america", returnclass = "sf")
+
+northeast_states <- us_states %>%
+    filter(name %in% c(
+        "Maine", "New Hampshire", "Vermont", "Massachusetts",
+        "Rhode Island", "Connecticut", "New York", "New Jersey",
+        "Pennsylvania", "North Carolina", "Virginia", "West Virginia",
+        "Maryland", "Delaware", "District of Columbia"
+    ))
+
+# --- Canada provinces ---
+canada_provinces <- ne_states(country = "canada", returnclass = "sf")
+
+atlantic_provinces <- canada_provinces %>%
+    filter(name %in% c(
+        "New Brunswick", "Nova Scotia", "Prince Edward Island",
+        "Newfoundland and Labrador", "Quebec", "Ontario"
+    ))
+
+# --- Example sample points (replace with your own data) ---
+dat_sf <- dat |>
+    st_as_sf(coords = c("lon", "lat"), crs = 4326)
+
+# --- Plot ---
+map <- ggplot() +
+    geom_sf(data = dat_sf, aes(color = season), pch = 21, size = 0.5, alpha = 0.25) +
+    geom_sf(data = northeast_states, fill = "grey90", color = "black", size = 0.3) +
+    geom_sf(data = atlantic_provinces, fill = "grey85", color = "black", size = 0.3) +
+    coord_sf(xlim = c(-76, -65), ylim = c(35, 44.575)) +
+    scale_color_manual(name = "Season", values = c("#d95f02", "#1b9e77")) +
+    theme_bw(base_size = 16) +
+    facet_wrap(~season, ncol = 2)
+
+ts <- ggplot(delta_year_day, aes(x = year)) +
+    geom_line(aes(y = Spring, color = "Spring"), size = 1) +
+    geom_point(aes(y = Spring, color = "Spring"), size = 2) +
+    geom_line(aes(y = Fall, color = "Fall"), size = 1) +
+    geom_point(aes(y = Fall, color = "Fall"), size = 2) +
+    scale_color_manual(name = "Season", values = c("Spring" = "#1b9e77", "Fall" = "#d95f02")) +
+    labs(y = "Median Trawl Day of Year") +
+    theme_bw(base_size = 16)
+
+samp_map_out <- map / ts + plot_layout(ncol = 1, heights = c(2, 1), widths = c(2, 1))
+ggsave(here::here("Figures/SurveyMap_TrawlDayTimeseries.png"), samp_map_out, width = 11, height = 8, units = "in", dpi = 300)

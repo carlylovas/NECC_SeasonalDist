@@ -8,8 +8,11 @@ library(rstanarm)
 library(glmmTMB)
 library(tidybayes)
 library(ggrepel)
+library(patchwork)
+library(ggh4x)
 
 fit <- FALSE
+
 # Load seasonal distance data ----
 dat <- readRDS(here::here("Data/seasonal_dist.rds")) # Generated in 02_SeasonalDistMetrics.R
 
@@ -74,10 +77,10 @@ if (fit) { # Fit the model using brms (takes about an hour on my computer)
         control = list(adapt_delta = 0.999, max_treedepth = 15)
     )
 
-    write_rds(mod_brms, file = "Data/seasonal_dist_brms.rds", compress = "gz") # Write out the model file to disk.
+    write_rds(mod_brms, file = "Results/Fit_Mods/seasonal_dist_brms.rds", compress = "gz") # Write out the model file to disk.
     # mod_brms <- readRDS("Data/mod_brms1.rds") # Read it in here if you don't want to run the model
 } else {
-    mod_brms <- readRDS("Data/seasonal_dist_brms.rds") # Read in the model if you don't want to run it.
+    mod_brms <- readRDS("Results/Fit_Mods/seasonal_dist_brms.rds") # Read in the model if you don't want to run it.
 }
 
 prior_summary(mod_brms) # This is the summary of the priors for the model.
@@ -108,7 +111,7 @@ nd <- expand.grid(
 
 predictions <- rstanarm::posterior_epred(mod_brms, newdata = nd, re.form = NULL) # Here we are using the model to generate predictions. Specifically, this will generate LINEAR predictions and will have smaller variance that posterior_predict(), because the variance is only based on the uncertainty in the expected value of the posterior predictive distribution. The residual error is ignored. For true posterior PREDICTIVE intervals we could use posterior_predict(). re.form = NULL ensures that the model accounts for ALL levels of uncertainly, e.g. uncertainly due to both fixed and random effects.
 
-predictions[1:10, 1:10] # gut check on structure
+# predictions[1:10, 1:10] # gut check on structure
 
 nd$ytilda <- apply(predictions, MARGIN = 2, median) # This code just extracts the median and 95% CI's for each value of year in the new data.
 nd$.lower <- apply(predictions, 2, quantile, 0.025)
@@ -201,12 +204,91 @@ out <- labeled_plot / label_table + plot_layout(heights = c(1, 0.5))
 ggsave("Figures/FG_temporaltrends.png", out, width = 11, height = 11, dpi = )
 
 # This one I imagine going into the supplement, but it the same figure but faceted by species and includes the CI's for each species specific trend.
+plot_list <- vector("list", length(unique(nd$functional_group)))
+names(plot_list) <- unique(nd$functional_group)
+colors <- c("#1b9e77", "#d95f02", "#7570b3")
+ncol <- 3
+nrow <- 6
+total_panels <- ncol * nrow
+
+i <- 1
+for (fg in unique(nd$functional_group)) {
+    # Filter data for this group
+    nd_fg <- nd %>% filter(functional_group == fg)
+    dat_mod_fg <- dat_mod %>% filter(functional_group == fg)
+
+    # Real species in this group
+    real_species <- unique(nd_fg$comname)
+    n_real <- length(real_species)
+
+    # Calculate how many dummy species needed
+    n_dummy <- total_panels - n_real
+
+    if (n_dummy > 0) {
+        # Create dummy species names
+        dummy_species <- paste0("dummy_", seq_len(n_dummy))
+
+        # Create dummy rows with NA for all relevant columns (adjust as needed)
+        dummy_rows <- tibble(
+            functional_group = fg,
+            comname = dummy_species,
+            year = NA_real_,
+            ytilda = NA_real_,
+            .lower = NA_real_,
+            .upper = NA_real_
+        )
+
+        # Combine real + dummy data
+        nd_fg_full <- bind_rows(nd_fg, dummy_rows) %>%
+            mutate(comname = factor(comname, levels = c(real_species, dummy_species)))
+
+        # Set factor levels on dat_mod_fg for consistent ordering (points)
+        dat_mod_fg <- dat_mod_fg %>%
+            mutate(comname = factor(comname, levels = c(real_species, dummy_species)))
+    } else {
+        # No dummy needed, just set factor for order
+        nd_fg_full <- nd_fg %>%
+            mutate(comname = factor(comname, levels = real_species))
+
+        dat_mod_fg <- dat_mod_fg %>%
+            mutate(comname = factor(comname, levels = real_species))
+    }
+
+    # Build the plot
+    plot_list[[fg]] <- ggplot(nd_fg_full, aes(x = year, y = ytilda)) +
+        geom_point(
+            data = dat_mod_fg, aes(x = year, y = dist_km, color = functional_group),
+            size = 0.9, show.legend = FALSE, na.rm = TRUE
+        ) +
+        geom_line(
+            data = nd_fg_full %>% filter(!is.na(year) & !is.na(ytilda)),
+            aes(color = functional_group), show.legend = FALSE, na.rm = TRUE
+        ) +
+        geom_ribbon(
+            data = nd_fg_full %>% filter(!is.na(year) & !is.na(.lower) & !is.na(.upper)),
+            aes(ymin = .lower, ymax = .upper), alpha = 0.1, na.rm = TRUE
+        ) +
+        scale_color_manual(values = colors[i]) +
+        scale_x_continuous(breaks = seq(from = 1970, to = 2023, by = 10)) +
+        ylim(c(0, 600)) +
+        facet_wrap(~comname, ncol = ncol, nrow = nrow) +
+        labs(y = "Predicted distance between seasonal centroids", x = "") +
+        ggtitle(fg) +
+        theme_minimal(base_size = 16) +
+        theme(plot.title = element_text(hjust = 0.5))
+
+    i <- i + 1
+}
+plot_list$benthivore + plot_list$piscivore + plot_list$planktivore + plot_layout(guides = "collect", axes = "collect")
+ggsave("Figures/Species_temporaltrends.png", width = 25, height = 15, dpi = 300)
+
 ggplot(nd, aes(x = year, y = ytilda)) +
-    geom_point(data = df, aes(x = year, y = dist_km, color = comname), size = 0.9, show.legend = F) +
-    geom_line(aes(color = comname), show.legend = F) +
+    geom_point(data = dat_mod, aes(x = year, y = dist_km, color = functional_group), size = 0.9, show.legend = F) +
+    geom_line(aes(color = functional_group), show.legend = F) +
     geom_ribbon(aes(ymin = .lower, ymax = .upper), alpha = 0.1) +
-    facet_wrap(~comname) +
-    theme_bw() +
+    facet_grid(functional_group ~ comname, scales = "free_y") +
+    # facet_wrap(~functional_group + comname) +
+    theme_minimal(base_size = 16) +
     labs(y = "Predicted distance between seasonal centroids", x = "")
 ggsave("Figures/Species_temporaltrends.png")
 
@@ -219,12 +301,62 @@ out <- mod_brms %>%
     filter(param_type == "year.cont")
 
 # Build out the coeffiencient plot.
-out %>%
+out_table <- out %>%
     group_by(species, functional_group) %>%
-    tidybayes::median_qi(`r_functional_group:comname`, .width = c(0.75, 0.95)) %>%
+    tidybayes::median_qi(`r_functional_group:comname`, .width = c(0.75, 0.95))
+out_table %>%
     ggplot(aes(x = `r_functional_group:comname`, y = forcats::fct_reorder(species, `r_functional_group:comname`))) +
     geom_pointinterval(aes(xmin = .lower, xmax = .upper)) +
     geom_vline(xintercept = 0, linetype = 3, color = "gray") +
     labs(x = "Change in seasonal distance over time", y = "Species") +
     theme_classic()
 ggsave("Figures/Species_coefplot.png")
+
+# Adding in average seasonal distance?
+# Suppose you have avg spring-fall distances per species
+avg_dist <- dat %>%
+    group_by(comname) %>%
+    summarize(mean_dist = mean(dist_km)) |>
+    mutate(species = gsub(" ", ".", comname)) |>
+    mutate(dist_group = cut(
+        mean_dist,
+        breaks = quantile(mean_dist, probs = c(0, 0.25, 0.75, 1), na.rm = TRUE),
+        include.lowest = TRUE,
+        labels = c("Low (0–25%)", "Medium (25–75%)", "High (75–100%)")
+    )) # Replace spaces with periods to match the coef plot species names
+
+# Join into slope/interval summary
+out_table <- out_table %>%
+    left_join(avg_dist)
+
+# Plot slopes + intervals with color = average distance
+cols <- c("#ece2f0", "#a6bddb", "#1c9099")
+out_table %>%
+    ggplot(aes(
+        x = `r_functional_group:comname`,
+        y = forcats::fct_reorder(species, `r_functional_group:comname`),
+        color = dist_group
+    )) +
+    geom_pointinterval(aes(xmin = .lower, xmax = .upper)) +
+    geom_vline(xintercept = 0, linetype = 3, color = "gray") +
+    scale_color_manual(
+        values = c(
+            "Low (0–25%)" = cols[1],
+            "Medium (25–75%)" = cols[2],
+            "High (75–100%)" = cols[3]
+        ),
+        labels = c(
+            "Low (28 – 65 km)",
+            "Medium (66 – 160 km)",
+            "High (161 – 358 km)"
+        )
+    ) +
+    labs(
+        x = "Change in seasonal distance over time",
+        y = "Species",
+        color = "Avg. spring–fall\ndistance"
+    ) +
+    theme_classic()
+ggsave("Figures/Species_coefplot_plusdist.png", height = 8, width = 11, dpi = 300)
+# Save it
+write.csv(out_table, "Results/seasonal_dist_coefplot.csv", row.names = FALSE)
