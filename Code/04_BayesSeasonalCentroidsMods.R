@@ -8,6 +8,8 @@ library(glmmTMB)
 library(tidybayes)
 library(plotly)
 
+fit <- FALSE # Set to TRUE to fit the model, starts at line 70, FALSE to read in the model
+
 # Load data with biomass weighted cog lat/lon ----
 dat <- readRDS(here::here("Data/seasonal_dist.rds")) # Generated in 02_SeasonalDistMetrics.R
 
@@ -65,7 +67,6 @@ dat_mod <- dat_mod |>
     group_by(comname) |>
     nest()
 
-fit_mod <- TRUE
 if (fit_mod) {
     dat_mod <- dat_mod |>
         mutate(
@@ -90,9 +91,9 @@ if (fit_mod) {
                 control = list(adapt_delta = 0.999, max_treedepth = 15)
             ))
         )
-    saveRDS(dat_mod, here::here("Results/seasonal_centroid_models.rds"))
+    saveRDS(dat_mod, here::here("Results/Fit_Mods/seasonal_centroid_models.rds"))
 } else {
-    dat_mod <- readRDS(here::here("Results/seasonal_centroid_models.rds"))
+    dat_mod <- readRDS(here::here("Results/Fit_Mods/seasonal_centroid_models.rds"))
 }
 
 # Results summary

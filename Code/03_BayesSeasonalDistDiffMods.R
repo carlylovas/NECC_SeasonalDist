@@ -11,7 +11,7 @@ library(ggrepel)
 library(patchwork)
 library(ggh4x)
 
-fit <- FALSE
+fit <- FALSE # Set to TRUE to fit the model, starts at line 67, FALSE to read in the model
 
 # Load seasonal distance data ----
 dat <- readRDS(here::here("Data/seasonal_dist.rds")) # Generated in 02_SeasonalDistMetrics.R
