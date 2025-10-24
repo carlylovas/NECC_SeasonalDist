@@ -8,7 +8,7 @@ library(glmmTMB)
 library(tidybayes)
 library(plotly)
 
-fit <- FALSE # Set to TRUE to fit the model, starts at line 70, FALSE to read in the model
+fit_mod <- FALSE # Set to TRUE to fit the model, starts at line 70, FALSE to read in the model
 
 # Load data with biomass weighted cog lat/lon ----
 dat <- readRDS(here::here("Data/seasonal_dist.rds")) # Generated in 02_SeasonalDistMetrics.R
@@ -161,10 +161,22 @@ dat_plot <- dat_plot %>%
         shift_pattern = factor(shift_pattern, levels = c("Stable", "Same rate shift", "Converging", "Diverging"), labels = c("Stable", "Marching", "Converging", "Diverging"))
     )
 
+# Work on soe_24_clean labels
+dat_plot <- dat_plot %>%
+    mutate(
+        `Functional Group` = case_when(
+            soe_24_clean == "planktivore" ~ "Planktivore",
+            soe_24_clean == "piscivore" ~ "Piscivore",
+            soe_24_clean == "benthivore" ~ "Benthivore"
+        ),
+        Mechanism = mechanism
+    )
+
+
 # save it for later
 write_csv(dat_plot, here::here("Results/seasonal_centroid_mod_summary.csv"))
 
-ggplot(dat_plot, aes(x = fall_mean, y = spring_mean, color = mechanism, shape = soe_24_clean)) +
+ggplot(dat_plot, aes(x = fall_mean, y = spring_mean, color = Mechanism, shape = `Functional Group`)) +
     geom_hline(yintercept = 0, linetype = "dashed", color = "gray") +
     geom_vline(xintercept = 0, linetype = "dashed", color = "gray") +
     geom_abline(slope = 1, intercept = 0, linetype = "dotted", color = "black") +

@@ -35,6 +35,9 @@ species_groupings <- species |>
     tibble() |>
     janitor::clean_names()
 
+# Write this out for future use
+write.csv(species_groupings, here::here("Data/SOE_species_list_24.csv"), row.names = FALSE)
+
 soe_24 <- species_groupings |>
     select(comname, soe_24) |>
     mutate(across(where(is.character), tolower)) |>
@@ -50,7 +53,7 @@ soe_24 <- bind_rows(soe_24, add)
 
 dat_mod <- dat |>
     left_join(soe_24) |>
-    filter(!soe_24 == "Benthos")
+    filter(!soe_24 == "Benthos") # Sea scallops -- removing these for now.
 
 # Some final naming/tidying
 dat_mod <- dat_mod |>
@@ -152,7 +155,7 @@ nd2 <- nd2 |>
     filter(!functional_group %in% c("Benthivore", "benthos"))
 
 
-# This is a figure paneled by functional group w/ only the CI's for functional group.
+# This is a figure paneled by functional group w/ only the CI's for functional group -- OLD VERSION WITH COLOR
 labeled_plot <- ggplot(nd, aes(x = year, y = ytilda)) +
     geom_line(aes(color = comname), show.legend = F) +
     geom_text_repel(
@@ -172,7 +175,7 @@ labeled_plot <- ggplot(nd, aes(x = year, y = ytilda)) +
     geom_ribbon(data = nd2, aes(x = year, y = ytilda, ymin = .lower, ymax = .upper), alpha = 0.1) +
     facet_wrap(~functional_group) +
     theme_bw() +
-    labs(y = "Predicted distance between seasonal centroids", x = "") +
+    labs(y = "Predicted distance between seasonal centroids (km)", x = "") +
     coord_cartesian(xlim = c(1970, 2025), clip = "off") + # 🔑 allows labels to go outside the panel
     theme(plot.margin = margin(5.5, 50, 5.5, 5.5)) # 👈 adds right margin space
 
@@ -203,10 +206,127 @@ label_table <- ggplot(label_df, aes(x = 1, y = y_pos)) +
 out <- labeled_plot / label_table + plot_layout(heights = c(1, 0.5))
 ggsave("Figures/FG_temporaltrends.png", out, width = 11, height = 11, dpi = )
 
+# New version without color
+# Nicer species and functional group names to sentence case
+dat_mod <- dat_mod |>
+    mutate(
+        comname = str_to_sentence(comname),
+        functional_group = case_when(
+            functional_group == "piscivore" ~ "Piscivore",
+            functional_group == "planktivore" ~ "Planktivore",
+            functional_group == "benthivore" ~ "Benthivore"
+        )
+    )
+
+nd <- nd |>
+    mutate(
+        comname = str_to_sentence(comname),
+        functional_group = case_when(
+            functional_group == "piscivore" ~ "Piscivore",
+            functional_group == "planktivore" ~ "Planktivore",
+            functional_group == "benthivore" ~ "Benthivore"
+        )
+    )
+
+nd2 <- nd2 |>
+    mutate(
+        functional_group = case_when(
+            functional_group == "piscivore" ~ "Piscivore",
+            functional_group == "planktivore" ~ "Planktivore",
+            functional_group == "benthivore" ~ "Benthivore"
+        )
+    )
+
+label_df <- label_df |>
+    mutate(
+        comname = str_to_sentence(comname),
+        functional_group = case_when(
+            functional_group == "piscivore" ~ "Piscivore",
+            functional_group == "planktivore" ~ "Planktivore",
+            functional_group == "benthivore" ~ "Benthivore"
+        )
+    )
+labeled_plot <- ggplot(nd, aes(x = year, y = ytilda)) +
+    geom_line(aes(color = functional_group, group = comname), show.legend = F) +
+    geom_text_repel(
+        data = label_df,
+        aes(label = species_id),
+        hjust = 0, # left-aligned
+        direction = "y", # repel vertically
+        nudge_x = 5, # push labels outside plot area
+        size = 2,
+        segment.color = "grey20",
+        max.overlaps = 12,
+        segment.color = "black",
+        segment.linetype = "dotted", # 👈 controls the line style
+        segment.size = 0.3
+    ) +
+    geom_line(data = nd2, aes(x = year, y = ytilda), linewidth = 1) +
+    geom_ribbon(data = nd2, aes(x = year, y = ytilda, ymin = .lower, ymax = .upper), alpha = 0.1) +
+    scale_color_manual(name = "Functional group", values = c("#66c2a5", "#fc8d62", "#8da0cb")) +
+    facet_wrap(~functional_group) +
+    theme_bw() +
+    labs(y = "Predicted distance between seasonal centroids (km)", x = "") +
+    coord_cartesian(xlim = c(1970, 2025), clip = "off") + # 🔑 allows labels to go outside the panel
+    theme(plot.margin = margin(5.5, 50, 5.5, 5.5)) # 👈 adds right margin space
+
+label_df <- label_df |>
+    mutate(label_plot = paste0(species_id, ": ", comname)) |>
+    group_by(functional_group) |>
+    arrange(ytilda, .by_group = TRUE) |> # or arrange(ytilda) for ascending
+    mutate(y_pos = row_number()) |>
+    ungroup()
+
+label_table <- ggplot(label_df, aes(x = 1, y = y_pos)) +
+    geom_text(aes(label = label_plot, color = functional_group), hjust = 1, size = 3.2) +
+    facet_wrap(~functional_group, scales = "free_y") +
+    coord_cartesian(clip = "off") +
+    theme_minimal() +
+    theme(
+        legend.position = "none",
+        axis.text = element_blank(),
+        axis.ticks = element_blank(),
+        axis.title = element_blank(),
+        panel.grid = element_blank(),
+        plot.margin = margin(5.5, 5.5, 5.5, 5.5),
+        strip.text = element_blank()
+    ) +
+    scale_x_continuous(expand = expansion(mult = c(0.05, 0))) # pull text to left
+
+out <- labeled_plot / label_table + plot_layout(heights = c(1, 0.5))
+ggsave("Figures/FG_temporaltrends_WithLabels.png", out, width = 11, height = 11, dpi = )
+
+# No species labels
+no_label_plot <- ggplot(nd, aes(x = year, y = ytilda)) +
+    geom_line(aes(color = functional_group, group = comname), show.legend = F) +
+    # geom_text_repel(
+    #     data = label_df,
+    #     aes(label = species_id),
+    #     hjust = 0, # left-aligned
+    #     direction = "y", # repel vertically
+    #     nudge_x = 5, # push labels outside plot area
+    #     size = 2,
+    #     segment.color = "grey20",
+    #     max.overlaps = 12,
+    #     segment.color = "black",
+    #     segment.linetype = "dotted", # 👈 controls the line style
+    #     segment.size = 0.3
+    # ) +
+    geom_line(data = nd2, aes(x = year, y = ytilda), linewidth = 1) +
+    geom_ribbon(data = nd2, aes(x = year, y = ytilda, ymin = .lower, ymax = .upper), alpha = 0.1) +
+    scale_color_manual(name = "Functional group", values = c("#66c2a5", "#fc8d62", "#8da0cb")) +
+    facet_wrap(~functional_group) +
+    theme_bw() +
+    labs(y = "Predicted distance between seasonal centroids (km)", x = "") +
+    coord_cartesian(xlim = c(1970, 2025), clip = "off") + # 🔑 allows labels to go outside the panel
+    theme(plot.margin = margin(5.5, 50, 5.5, 5.5)) # 👈 adds right margin space
+ggsave("Figures/FG_temporaltrends_.png", no_label_plot, width = 11, height = 11, dpi = )
+
+
 # This one I imagine going into the supplement, but it the same figure but faceted by species and includes the CI's for each species specific trend.
 plot_list <- vector("list", length(unique(nd$functional_group)))
 names(plot_list) <- unique(nd$functional_group)
-colors <- c("#1b9e77", "#d95f02", "#7570b3")
+colors <- c("#66c2a5", "#fc8d62", "#8da0cb")
 ncol <- 3
 nrow <- 6
 total_panels <- ncol * nrow
@@ -271,26 +391,26 @@ for (fg in unique(nd$functional_group)) {
         scale_color_manual(values = colors[i]) +
         scale_x_continuous(breaks = seq(from = 1970, to = 2023, by = 10)) +
         ylim(c(0, 600)) +
-        facet_wrap(~comname, ncol = ncol, nrow = nrow) +
-        labs(y = "Predicted distance between seasonal centroids", x = "") +
+        facet_wrap(~comname, ncol = ncol) +
+        labs(y = "Predicted distance between seasonal centroids (km)", x = "") +
         ggtitle(fg) +
         theme_minimal(base_size = 16) +
         theme(plot.title = element_text(hjust = 0.5))
-
     i <- i + 1
 }
-plot_list$benthivore + plot_list$piscivore + plot_list$planktivore + plot_layout(guides = "collect", axes = "collect")
+
+plot_list$Benthivore + plot_list$Piscivore + plot_list$Planktivore + plot_layout(guides = "collect", axes = "collect")
 ggsave("Figures/Species_temporaltrends.png", width = 25, height = 15, dpi = 300)
 
-ggplot(nd, aes(x = year, y = ytilda)) +
-    geom_point(data = dat_mod, aes(x = year, y = dist_km, color = functional_group), size = 0.9, show.legend = F) +
-    geom_line(aes(color = functional_group), show.legend = F) +
-    geom_ribbon(aes(ymin = .lower, ymax = .upper), alpha = 0.1) +
-    facet_grid(functional_group ~ comname, scales = "free_y") +
-    # facet_wrap(~functional_group + comname) +
-    theme_minimal(base_size = 16) +
-    labs(y = "Predicted distance between seasonal centroids", x = "")
-ggsave("Figures/Species_temporaltrends.png")
+# ggplot(nd, aes(x = year, y = ytilda)) +
+#     geom_point(data = dat_mod, aes(x = year, y = dist_km, color = functional_group), size = 0.9, show.legend = F) +
+#     geom_line(aes(color = functional_group), show.legend = F) +
+#     geom_ribbon(aes(ymin = .lower, ymax = .upper), alpha = 0.1) +
+#     facet_grid(functional_group ~ comname, scales = "free_y") +
+#     # facet_wrap(~functional_group + comname) +
+#     theme_minimal(base_size = 16) +
+#     labs(y = "Predicted distance between seasonal centroids", x = "")
+# ggsave("Figures/Species_temporaltrends.png")
 
 
 # Coef plot: here, I do a little wrangling with the mod_brms posteriors to get at the coefficients (e.g the slope estimate [beta = year.cont*comname]) for the change in seasonal distance OVER TIME for each species nested within functional group.
@@ -304,6 +424,15 @@ out <- mod_brms %>%
 out_table <- out %>%
     group_by(species, functional_group) %>%
     tidybayes::median_qi(`r_functional_group:comname`, .width = c(0.75, 0.95))
+
+# Common name to sentence case for plotting purposes
+out_table <- out_table %>%
+    mutate(
+        comname = gsub("\\.", " ", species),
+        comname = str_to_sentence(comname)
+    )
+
+# No colors
 out_table %>%
     ggplot(aes(x = `r_functional_group:comname`, y = forcats::fct_reorder(species, `r_functional_group:comname`))) +
     geom_pointinterval(aes(xmin = .lower, xmax = .upper)) +
@@ -314,10 +443,13 @@ ggsave("Figures/Species_coefplot.png")
 
 # Adding in average seasonal distance?
 # Suppose you have avg spring-fall distances per species
+dat <- dat %>%
+    mutate(
+        comname = str_to_sentence(comname)
+    )
 avg_dist <- dat %>%
     group_by(comname) %>%
     summarize(mean_dist = mean(dist_km)) |>
-    mutate(species = gsub(" ", ".", comname)) |>
     mutate(dist_group = cut(
         mean_dist,
         breaks = quantile(mean_dist, probs = c(0, 0.25, 0.75, 1), na.rm = TRUE),
@@ -331,6 +463,16 @@ out_table <- out_table %>%
 
 # Plot slopes + intervals with color = average distance
 cols <- c("#ece2f0", "#a6bddb", "#1c9099")
+out_table <- out_table %>%
+    mutate(
+        species = gsub("\\.", " ", species),
+        species = str_to_sentence(comname),
+        functional_group = case_when(
+            functional_group == "piscivore" ~ "Piscivore",
+            functional_group == "planktivore" ~ "Planktivore",
+            functional_group == "benthivore" ~ "Benthivore"
+        )
+    )
 out_table %>%
     ggplot(aes(
         x = `r_functional_group:comname`,
@@ -360,3 +502,20 @@ out_table %>%
 ggsave("Figures/Species_coefplot_plusdist.png", height = 8, width = 11, dpi = 300)
 # Save it
 write.csv(out_table, "Results/seasonal_dist_coefplot.csv", row.names = FALSE)
+
+# Get min/mean/max change for positive slopes and then for negative slopes
+out_table %>%
+    filter(`r_functional_group:comname` > 0) %>%
+    summarize(
+        min_change = min(`r_functional_group:comname`),
+        mean_change = mean(`r_functional_group:comname`),
+        max_change = max(`r_functional_group:comname`)
+    )
+
+out_table %>%
+    filter(`r_functional_group:comname` < 0) %>%
+    summarize(
+        min_change = min(`r_functional_group:comname`),
+        mean_change = mean(`r_functional_group:comname`),
+        max_change = max(`r_functional_group:comname`)
+    )
