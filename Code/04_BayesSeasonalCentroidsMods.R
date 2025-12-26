@@ -9,6 +9,7 @@ library(tidybayes)
 library(plotly)
 
 fit_mod <- FALSE # Set to TRUE to fit the model, starts at line 70, FALSE to read in the model
+# fit_mod <- TRUE
 
 # Load data with biomass weighted cog lat/lon ----
 dat <- readRDS(here::here("Data/seasonal_dist.rds")) # Generated in 02_SeasonalDistMetrics.R
@@ -67,31 +68,52 @@ dat_mod <- dat_mod |>
     group_by(comname) |>
     nest()
 
+methods(default_prior.brmsfit)
+
+priors <- c(
+  set_prior("normal(0, 5)", class = "b")
+)
+
+base_fit <- brm(
+  avg_lat ~ year.cont * season,
+  data = dat_mod$data[[1]],  # any one dataset is fine
+  family = gaussian(),
+  prior = priors,
+  chains = 4,
+  cores = 4,
+  iter = 5000,
+  warmup = 1000,
+  control = list(adapt_delta = 0.999, max_treedepth = 15)
+)
+
+base_fit_lon <- brm(
+  avg_lon ~ year.cont * season,
+  data = dat_mod$data[[1]],  # any one dataset is fine
+  family = gaussian(),
+  prior = priors,
+  chains = 4,
+  cores = 4,
+  iter = 5000,
+  warmup = 1000,
+  control = list(adapt_delta = 0.999, max_treedepth = 15)
+)
+
+
 if (fit_mod) {
     dat_mod <- dat_mod |>
         mutate(
-            model_lat = map(data, ~ brm(
-                avg_lat ~ year.cont * season,
-                data = .x,
-                family = gaussian(),
-                chains = 4,
-                cores = 4,
-                iter = 5000,
-                warmup = 1000,
-                control = list(adapt_delta = 0.999, max_treedepth = 15)
-            )),
-            model_lon = map(data, ~ brm(
-                avg_lon ~ year.cont * season,
-                data = .x,
-                family = gaussian(),
-                chains = 4,
-                cores = 4,
-                iter = 5000,
-                warmup = 1000,
-                control = list(adapt_delta = 0.999, max_treedepth = 15)
-            ))
-        )
-    saveRDS(dat_mod, here::here("Results/Fit_Mods/seasonal_centroid_models.rds"))
+          model_lat = map(data, ~ update(
+            base_fit,
+            newdata = .x,
+            recompile = FALSE
+          ))) |>
+          mutate(
+            model_lon = map(data, ~ update(
+              base_fit_lon,
+              newdata = .x,
+              recompile = FALSE
+            )))
+    write_rds(dat_mod, here::here("Results/Fit_Mods/seasonal_centroid_models.rds"), compress = "gz")
 } else {
     dat_mod <- readRDS(here::here("Results/Fit_Mods/seasonal_centroid_models.rds"))
 }
