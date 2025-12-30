@@ -68,8 +68,6 @@ dat_mod <- dat_mod |>
     group_by(comname) |>
     nest()
 
-methods(default_prior.brmsfit)
-
 priors <- c(
   set_prior("normal(0, 5)", class = "b")
 )
@@ -231,7 +229,7 @@ ggplot(dat_plot, aes(x = fall_mean, y = spring_mean, color = mechanism, shape = 
     geom_errorbar(aes(ymin = spring_lower, ymax = spring_upper)) +
     geom_errorbarh(aes(xmin = fall_lower, xmax = fall_upper)) +
     geom_point(size = 2.5) +
-    geom_text_repel(
+    ggrepel::geom_text_repel(
         data = label_data,
         aes(y = label_y, label = comname), # Change to another label column if needed
         size = 4,

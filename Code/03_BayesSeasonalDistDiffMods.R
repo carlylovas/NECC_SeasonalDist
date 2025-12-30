@@ -12,6 +12,7 @@ library(patchwork)
 library(ggh4x)
 
 fit <- FALSE # Set to TRUE to fit the model, starts at line 67, FALSE to read in the model
+#fit <- TRUE
 
 # Load seasonal distance data ----
 dat <- readRDS(here::here("Data/seasonal_dist.rds")) # Generated in 02_SeasonalDistMetrics.R
@@ -47,13 +48,13 @@ soe_24 <- species_groupings |>
 # One missing?
 unique(dat$comname)[!unique(dat$comname) %in% soe_24$comname]
 
-add <- data.frame(comname = "windowpane flounder", soe_24 = "Benthivore")
+add <- data.frame(comname = "windowpane flounder", soe_24 = "benthivore")
 
 soe_24 <- bind_rows(soe_24, add)
 
 dat_mod <- dat |>
     left_join(soe_24) |>
-    filter(!soe_24 == "Benthos") # Sea scallops -- removing these for now.
+    filter(!soe_24 == "benthos") # Sea scallops -- removing these for now.
 
 # Some final naming/tidying
 dat_mod <- dat_mod |>
@@ -67,11 +68,56 @@ summary(dat_mod)
 t <- dat_mod |> filter(is.na(dist_km))
 t
 
+
+#------------
+## Temp
+#------------
+
+# priors <- c(
+#   # Population-level
+#   prior(normal(0, 5), class = "b", coef = "delta_year_day"),
+#   prior(normal(0, 5), class = "b", coef = "year.cont")
+# )
+# 
+# mod_brms <- brm(
+#   dist_km ~ delta_year_day + year.cont + (year.cont | functional_group / comname),
+#   data = dat_mod,
+#   # family = Gamma(link = "log"),
+#   family = lognormal(link = "identity"),
+#   prior = priors,
+#   chains = 3, # Number of MCMC chains (adjust based on your computational resources)
+#   cores = 3, # Number of cores (adjust as needed)
+#   iter = 2000, # Number of iterations per chain
+#   warmup = 1000, # Number of warmup iterations
+#   #sample_prior = "only",
+#   # control = list(adapt_delta = 0.999, max_treedepth = 15)
+# )
+# 
+# mod_brms$prior
+# default_prior(mod_brms)
+# stancode(mod_brms)
+# summary(mod_brms)
+
+
+#------------
+
+priors <- c(
+  # Population-level
+  prior(normal(0, 5), class = "b")
+)
+
+get_prior(dist_km ~ delta_year_day + (year.cont | functional_group / comname),
+          data = dat_mod,
+          #family = Gamma(link = "log"),
+          family = lognormal(link = "identity"))
+
 if (fit) { # Fit the model using brms (takes about an hour on my computer)
     mod_brms <- brm(
         dist_km ~ delta_year_day + (year.cont | functional_group / comname),
         data = dat_mod,
-        family = Gamma(link = "log"),
+        #family = Gamma(link = "log"),
+        family = lognormal(link = "identity"),
+        prior = priors,
         chains = 4, # Number of MCMC chains (adjust based on your computational resources)
         cores = 4, # Number of cores (adjust as needed)
         iter = 5000, # Number of iterations per chain
@@ -126,8 +172,8 @@ species_ids <- nd %>%
     mutate(species_id = row_number())
 nd <- nd %>% left_join(species_ids, by = "comname")
 
-nd <- nd |>
-    filter(!functional_group %in% c("Benthivore", "benthos"))
+# nd <- nd |>
+#     filter(!functional_group %in% c("Benthivore", "benthos"))
 
 label_df <- nd %>%
     group_by(comname, species_id, functional_group) %>%
@@ -151,8 +197,8 @@ nd2$ytilda <- apply(predictions, MARGIN = 2, median) # Same housekeeping to get 
 nd2$.lower <- apply(predictions, 2, quantile, 0.025)
 nd2$.upper <- apply(predictions, 2, quantile, 0.975)
 
-nd2 <- nd2 |>
-    filter(!functional_group %in% c("Benthivore", "benthos"))
+# nd2 <- nd2 |>
+#     filter(!functional_group %in% c("Benthivore", "benthos"))
 
 
 # This is a figure paneled by functional group w/ only the CI's for functional group -- OLD VERSION WITH COLOR
@@ -210,41 +256,17 @@ ggsave("Figures/FG_temporaltrends.png", out, width = 11, height = 11, dpi = )
 # Nicer species and functional group names to sentence case
 dat_mod <- dat_mod |>
     mutate(
-        comname = str_to_sentence(comname),
-        functional_group = case_when(
-            functional_group == "piscivore" ~ "Piscivore",
-            functional_group == "planktivore" ~ "Planktivore",
-            functional_group == "benthivore" ~ "Benthivore"
-        )
+        comname = str_to_sentence(comname)
     )
 
 nd <- nd |>
     mutate(
-        comname = str_to_sentence(comname),
-        functional_group = case_when(
-            functional_group == "piscivore" ~ "Piscivore",
-            functional_group == "planktivore" ~ "Planktivore",
-            functional_group == "benthivore" ~ "Benthivore"
-        )
-    )
-
-nd2 <- nd2 |>
-    mutate(
-        functional_group = case_when(
-            functional_group == "piscivore" ~ "Piscivore",
-            functional_group == "planktivore" ~ "Planktivore",
-            functional_group == "benthivore" ~ "Benthivore"
-        )
+        comname = str_to_sentence(comname)
     )
 
 label_df <- label_df |>
     mutate(
-        comname = str_to_sentence(comname),
-        functional_group = case_when(
-            functional_group == "piscivore" ~ "Piscivore",
-            functional_group == "planktivore" ~ "Planktivore",
-            functional_group == "benthivore" ~ "Benthivore"
-        )
+        comname = str_to_sentence(comname)
     )
 labeled_plot <- ggplot(nd, aes(x = year, y = ytilda)) +
     geom_line(aes(color = functional_group, group = comname), show.legend = F) +
@@ -335,7 +357,9 @@ i <- 1
 for (fg in unique(nd$functional_group)) {
     # Filter data for this group
     nd_fg <- nd %>% filter(functional_group == fg)
-    dat_mod_fg <- dat_mod %>% filter(functional_group == fg)
+    dat_mod_fg <- dat_mod %>%
+      mutate(functional_group = str_to_sentence(functional_group)) %>%
+      filter(functional_group == fg)
 
     # Real species in this group
     real_species <- unique(nd_fg$comname)
@@ -415,6 +439,42 @@ ggsave("Figures/Species_temporaltrends.png", width = 25, height = 15, dpi = 300)
 
 # Coef plot: here, I do a little wrangling with the mod_brms posteriors to get at the coefficients (e.g the slope estimate [beta = year.cont*comname]) for the change in seasonal distance OVER TIME for each species nested within functional group.
 
+nd %>% 
+  filter(comname %in% c("Alewife", "Longfin squid", "Jonah crab")) %>%
+  ggplot(aes(x = year, y = ytilda)) +
+  geom_point(
+    data = dat_mod %>%
+      filter(comname %in%c("Alewife", "Longfin squid", "Jonah crab")) %>%
+      mutate(functional_group = str_to_sentence(functional_group)),
+    aes(x = year, y = dist_km, color = functional_group),
+    size = 0.9, show.legend = FALSE, na.rm = TRUE
+  ) +
+  geom_line(
+    aes(color = functional_group), show.legend = FALSE, na.rm = TRUE
+  ) +
+  geom_ribbon(
+    aes(ymin = .lower, ymax = .upper), alpha = 0.1, na.rm = TRUE
+  ) +
+  scale_color_manual(values = colors) +
+  scale_x_continuous(breaks = seq(from = 1970, to = 2023, by = 10)) +
+  ylim(c(0, 600)) +
+  facet_wrap(~comname, nrow = 3) +
+  labs(y = "Distance (km)", x = "") +
+  theme_minimal(base_size = 16) +
+  theme(plot.title = element_text(hjust = 0.5))
+
+
+
+
+
+
+
+
+
+
+
+
+
 out <- mod_brms %>%
     spread_draws(`r_functional_group:comname`[string, param_type]) %>% # Funky data wrangling. Unfortunately, this leaves a period in the common names which might curse us later, but going to avoid dealing with it for now.
     separate(string, into = c("functional_group", "species"), sep = "_") %>%
@@ -423,7 +483,7 @@ out <- mod_brms %>%
 # Build out the coeffiencient plot.
 out_table <- out %>%
     group_by(species, functional_group) %>%
-    tidybayes::median_qi(`r_functional_group:comname`, .width = c(0.75, 0.95))
+    tidybayes::mean_qi(`r_functional_group:comname`, .width = c(0.75, 0.95))
 
 # Common name to sentence case for plotting purposes
 out_table <- out_table %>%
@@ -440,6 +500,28 @@ out_table %>%
     labs(x = "Change in seasonal distance over time", y = "Species") +
     theme_classic()
 ggsave("Figures/Species_coefplot.png")
+
+
+slopes <- mod_brms %>%
+  spread_draws(
+    `r_functional_group`[fg, type], 
+    `r_functional_group:comname`[fg_name, type_2]
+  ) %>%
+  mutate(
+    beta_species = r_functional_group + r_functional_group:comname
+  )
+
+
+
+
+
+
+
+
+
+
+
+
 
 # Adding in average seasonal distance?
 # Suppose you have avg spring-fall distances per species
