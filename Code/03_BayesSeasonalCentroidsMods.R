@@ -7,6 +7,7 @@ library(rstanarm)
 library(glmmTMB)
 library(tidybayes)
 library(plotly)
+library(ggrepel)
 
 fit_mod <- FALSE # Set to TRUE to fit the model, starts at line 70, FALSE to read in the model
 
@@ -45,7 +46,7 @@ soe_24 <- bind_rows(soe_24, add)
 
 dat_mod <- dat |>
     left_join(soe_24) |>
-    filter(!soe_24 == "benthos") |>
+    filter(!comname == "sea scallop") |>
     mutate(season = factor(season, levels = c("Fall", "Spring")))
 table(dat_mod$soe_24)
 
@@ -136,12 +137,17 @@ dat_mod <- dat_mod %>%
         gap_ci_excludes_0 = map_lgl(summary_lat, ~ .x$gap_lower > 0 | .x$gap_upper < 0),
         shift_pattern = case_when(
             !fall_ci_excludes_0 & !spring_ci_excludes_0 ~ "Stable",
-            !gap_ci_excludes_0 ~ "Same rate shift",
+            # Marching: BOTH moving AND gap includes zero
+            fall_ci_excludes_0 & spring_ci_excludes_0 & !gap_ci_excludes_0 ~ "Marching",
+            # Converging: gap is negative (spring faster than fall)
             gap_ci_excludes_0 & summary_lat[[1]]$gap_mean < 0 ~ "Converging",
+            # Diverging: gap is positive (fall faster than spring)
             gap_ci_excludes_0 & summary_lat[[1]]$gap_mean > 0 ~ "Diverging",
+            # This catches cases where only one season moves but gap not significant
+            # You might want a separate category for these
             TRUE ~ "Unclear"
         ),
-        mechanism = case_when(
+        Dynamics = case_when(
             !fall_ci_excludes_0 & spring_ci_excludes_0 ~ "Spring moving only",
             fall_ci_excludes_0 & !spring_ci_excludes_0 ~ "Fall moving only",
             fall_ci_excludes_0 & spring_ci_excludes_0 ~ "Both moving",
@@ -151,39 +157,59 @@ dat_mod <- dat_mod %>%
 
 # Unnest and Plot
 dat_plot <- dat_mod %>%
-    select(comname, summary_lat, shift_pattern, mechanism) %>%
+    select(comname, summary_lat, shift_pattern, Dynamics) %>%
     unnest(summary_lat) |>
     left_join(soe_24)
 
 dat_plot <- dat_plot %>%
     mutate(
-        soe_24_clean = ifelse(tolower(soe_24) %in% c("benthivore", "benthos"), "benthivore", soe_24),
-        shift_pattern = factor(shift_pattern, levels = c("Stable", "Same rate shift", "Converging", "Diverging"), labels = c("Stable", "Marching", "Converging", "Diverging"))
+        shift_pattern = factor(shift_pattern, levels = c("Stable", "Marching", "Converging", "Diverging", "Unclear"))
     )
 
 # Work on soe_24_clean labels
 dat_plot <- dat_plot %>%
     mutate(
         `Functional Group` = case_when(
-            soe_24_clean == "planktivore" ~ "Planktivore",
-            soe_24_clean == "piscivore" ~ "Piscivore",
-            soe_24_clean == "benthivore" ~ "Benthivore"
+            soe_24 == "planktivore" ~ "Planktivore",
+            soe_24 == "piscivore" ~ "Piscivore",
+            soe_24 == "benthivore" ~ "Benthivore"
         ),
-        Mechanism = mechanism
+        Dyanmics = Dynamics
     )
 
 
 # save it for later
 write_csv(dat_plot, here::here("Results/seasonal_centroid_mod_summary.csv"))
 
-ggplot(dat_plot, aes(x = fall_mean, y = spring_mean, color = Mechanism, shape = `Functional Group`)) +
+# Create formatted results table
+results_table <- dat_plot %>%
+    mutate(
+        `Fall mean (LCI - UCI)` = sprintf("%.2f (%.2f - %.2f)", fall_mean, fall_lower, fall_upper),
+        `Spring mean (LCI - UCI)` = sprintf("%.2f (%.2f - %.2f)", spring_mean, spring_lower, spring_upper),
+        `Fall - Spring Difference (LCI - UCI)` = sprintf("%.2f (%.2f - %.2f)", gap_mean, gap_lower, gap_upper)
+    ) %>%
+    select(
+        `Functional Group`,
+        Species = comname,
+        `Fall mean (LCI - UCI)`,
+        `Spring mean (LCI - UCI)`,
+        `Fall - Spring Difference (LCI - UCI)`,
+        `Shift Pattern` = shift_pattern,
+        Dynamics
+    ) %>%
+    arrange(`Functional Group`, Species)
+
+# Save formatted table
+write_csv(results_table, here::here("Results/seasonal_centroid_results_formatted.csv"))
+
+ggplot(dat_plot, aes(x = fall_mean, y = spring_mean, color = Dynamics, shape = `Functional Group`)) +
     geom_hline(yintercept = 0, linetype = "dashed", color = "gray") +
     geom_vline(xintercept = 0, linetype = "dashed", color = "gray") +
     geom_abline(slope = 1, intercept = 0, linetype = "dotted", color = "black") +
     geom_errorbar(aes(ymin = spring_lower, ymax = spring_upper), alpha = 0.4) +
     geom_errorbarh(aes(xmin = fall_lower, xmax = fall_upper), alpha = 0.4) +
     geom_point(size = 2.5) +
-    facet_wrap(~shift_pattern) +
+    facet_wrap(~shift_pattern, nrow = 1) +
     labs(
         x = "Fall trend (° latitude/year)",
         y = "Spring trend (° latitude/year)",
@@ -191,42 +217,52 @@ ggplot(dat_plot, aes(x = fall_mean, y = spring_mean, color = Mechanism, shape = 
         subtitle = "With 95% credible intervals"
     ) +
     theme_minimal()
-ggsave("Figures/SpeciesSeasonalTrends.jpg")
+ggsave("Figures/SpeciesSeasonalTrends.jpg", width = 11, height = 8, dpi = 300)
 
 # Highlihgting species
-dat_plot$alpha_highlight <- ifelse(dat_plot$comname %in% c("alewife", "longfin squid", "goosefish", "winter skate"), 1, 0.1)
+dat_plot$alpha_highlight <- ifelse(dat_plot$comname %in% c("alewife", "black sea bass"), 1, 0.6)
 
-t <- dat_plot |> filter(shift_pattern == "Diverging")
+label_data <- subset(dat_plot, comname %in% c("alewife", "black sea bass"))
 
-label_data <- subset(dat_plot, comname %in% c("alewife", "longfin squid", "goosefish", "winter skate"))
-label_data$label_y <- label_data$spring_upper + 0.01 # Adjust offset as needed
+# Manually set label positions - adjust these coordinates as needed
+label_data$label_x <- ifelse(label_data$comname == "alewife",
+                              -0.185,  # alewife x position
+                              0.22)  # black sea bass x position
+label_data$label_y <- ifelse(label_data$comname == "alewife",
+                              0.39,   # alewife y position
+                              0.48)   # black sea bass y position
 
 
-ggplot(dat_plot, aes(x = fall_mean, y = spring_mean, color = mechanism, shape = soe_24_clean, alpha = alpha_highlight)) +
+out<- ggplot(dat_plot, aes(x = fall_mean, y = spring_mean, color = Dynamics, shape = `Functional Group`, alpha = alpha_highlight)) +
     geom_hline(yintercept = 0, linetype = "dashed", color = "gray") +
     geom_vline(xintercept = 0, linetype = "dashed", color = "gray") +
     geom_abline(slope = 1, intercept = 0, linetype = "dotted", color = "black") +
     geom_errorbar(aes(ymin = spring_lower, ymax = spring_upper)) +
     geom_errorbarh(aes(xmin = fall_lower, xmax = fall_upper)) +
+    geom_point(data = subset(dat_plot, comname %in% c("alewife", "black sea bass")),
+               size = 3.5, color = "black") +
     geom_point(size = 2.5) +
     geom_text_repel(
         data = label_data,
-        aes(y = label_y, label = comname), # Change to another label column if needed
+        aes(label = comname, x = label_x, y = label_y),
         size = 4,
         max.overlaps = 20,
         segment.color = "gray40",
         box.padding = 0.4,
+        force = 0,
+        force_pull = 0,
         show.legend = FALSE
     ) +
-    facet_wrap(~shift_pattern) +
+    facet_wrap(~shift_pattern, nrow = 1) +
     labs(
         x = "Fall trend (° latitude/year)",
-        y = "Spring trend (° latitude/year)",
-        title = "Seasonal centroid shift patterns by species",
-        subtitle = "With 95% credible intervals"
+        y = "Spring trend (° latitude/year)"
     ) +
-    theme_minimal()
-ggsave("Figures/SpeciesSeasonalTrends_CaseStudies.jpg")
+    scale_alpha_identity() +
+    theme_minimal(base_size = 16) +
+    theme(legend.position = "bottom")
+out
+ggsave("Figures/SpeciesSeasonalTrends_CaseStudies.jpg", out, width = 15, height = 8, dpi = 300)
 
 # Interactive plot
 # Base ggplot
