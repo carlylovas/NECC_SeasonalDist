@@ -141,6 +141,7 @@ delta_year_day <- year_day |>
 
 saveRDS(delta_year_day, here::here("Data/trawl_yearday_diff.rds"))
 
+
 rm(list = ls())
 
 # Quick sample map of the data and timeseries of median trawl day by season
@@ -180,6 +181,7 @@ map <- ggplot() +
     coord_sf(xlim = c(-76, -65), ylim = c(35, 44.575)) +
     scale_color_manual(name = "Season", values = c("#d95f02", "#1b9e77")) +
     theme_bw(base_size = 16) +
+    theme(legend.position = "none") +
     facet_wrap(~season, ncol = 2)
 
 ts <- ggplot(delta_year_day, aes(x = year)) +
