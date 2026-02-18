@@ -1,6 +1,8 @@
 #####
 ## Fitting Bayesian model to changes in latitude (longitude) overtime for each species by season
 #####
+
+# Libraries ----
 library(brms)
 library(tidyverse)
 library(rstanarm)
@@ -9,11 +11,11 @@ library(tidybayes)
 library(plotly)
 library(ggrepel)
 
-fit_mod <- FALSE # Set to TRUE to fit the model, starts at line 70, FALSE to read in the model
-# fit_mod <- TRUE
+# Set up and data prep ----
+fit_mod<- TRUE # Set to false if already done to avoid refitting
 
 # Load data with biomass weighted cog lat/lon ----
-dat <- readRDS(here::here("Data/seasonal_dist.rds")) # Generated in 02_SeasonalDistMetrics.R
+dat <- readRDS(here::here("Data/seasonal_dist_withnas.rds")) # Generated in 02_SeasonalDistMetrics.R
 
 # Bring over the difference between seasonal median trawl survey day
 delta_year_day <- readRDS(here::here("Data/trawl_yearday_diff.rds")) |>
@@ -38,10 +40,11 @@ soe_24 <- species_groupings |>
     distinct()
 
 table(soe_24$soe_24)
-# One missing?
-unique(dat$comname)[!unique(dat$comname) %in% soe_24$comname]
 
-add <- data.frame(comname = "windowpane flounder", soe_24 = "benthivore")
+# Check for missing
+unique(dat$comname)[!unique(dat$comname) %in% soe_24$comname]
+add <- data.frame(comname = c("lanternfish (unclassified)", "windowpane flounder"), soe_24 = c("planktivore", "benthivore"))
+#add <- data.frame(comname = c("windowpane flounder"), soe_24 = c("benthivore"))
 
 soe_24 <- bind_rows(soe_24, add)
 
@@ -50,7 +53,6 @@ dat_mod <- dat |>
     filter(!comname == "sea scallop") |>
     mutate(season = factor(season, levels = c("Fall", "Spring")))
 table(dat_mod$soe_24)
-
 
 # Some final naming/tidying
 dat_mod <- dat_mod |>
@@ -64,6 +66,7 @@ summary(dat_mod)
 t <- dat_mod |> filter(is.na(dist_km))
 t
 
+# Model fitting ----
 # Going to fit a model to each species
 dat_mod <- dat_mod |>
     group_by(comname) |>
@@ -112,11 +115,12 @@ if (fit_mod) {
               newdata = .x,
               recompile = FALSE
             )))
-    write_rds(dat_mod, here::here("Results/Fit_Mods/seasonal_centroid_models.rds"), compress = "gz")
+    write_rds(dat_mod, here::here("Results/Fit_Mods/seasonal_centroid_models_nas.rds"), compress = "gz")
 } else {
-    dat_mod <- readRDS(here::here("Results/Fit_Mods/seasonal_centroid_models.rds"))
+    dat_mod <- readRDS(here::here("Results/Fit_Mods/seasonal_centroid_models_nas.rds"))
 }
 
+# Summarize Results ----
 # Results summary
 # Step 1: Extract draws
 dat_mod <- dat_mod %>%
@@ -199,7 +203,7 @@ dat_plot <- dat_plot %>%
 
 
 # save it for later
-write_csv(dat_plot, here::here("Results/seasonal_centroid_mod_summary.csv"))
+write_csv(dat_plot, here::here("Results/seasonal_centroid_mod_summary_nas.csv"))
 
 # Create formatted results table
 results_table <- dat_plot %>%
@@ -220,7 +224,7 @@ results_table <- dat_plot %>%
     arrange(`Functional Group`, Species)
 
 # Save formatted table
-write_csv(results_table, here::here("Results/seasonal_centroid_results_formatted.csv"))
+write_csv(results_table, here::here("Results/seasonal_centroid_results_formatted_nas.csv"))
 
 ggplot(dat_plot, aes(x = fall_mean, y = spring_mean, color = Dynamics, shape = `Functional Group`)) +
     geom_hline(yintercept = 0, linetype = "dashed", color = "gray") +

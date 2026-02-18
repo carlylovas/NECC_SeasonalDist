@@ -72,4 +72,17 @@ seasonal_dist_out <- seasonal_dist |>
   select(comname, data) |>
   unnest(cols = c(data)) |>
   unnest(cols = c(data))
-write_rds(seasonal_dist_out, here("Data", "seasonal_dist.rds"))
+summary(seasonal_dist_out)
+
+# 15 NAs
+t<- seasonal_dist_out |>
+  filter(is.na(dist_m))
+t
+
+# Confirm NAs are due to missing season in that year
+na_check <- t |>
+  select(comname, year) |>
+  left_join(seas_cob |> select(comname, year, season), by = c("comname", "year"))
+na_check # Should show only one season per species-year combo
+
+write_rds(seasonal_dist_out, here("Data", "seasonal_dist_withnas.rds"))

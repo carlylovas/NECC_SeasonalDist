@@ -2,6 +2,7 @@
 ## Fitting Bayesian Hierarchical Models to Species Seasonal Distance Differences by Functional Group
 #####
 
+# Libraries ----
 library(brms)
 library(tidyverse)
 library(rstanarm)
@@ -11,11 +12,11 @@ library(ggrepel)
 library(patchwork)
 library(ggh4x)
 
-fit <- FALSE # Set to TRUE to fit the model, starts at line 67, FALSE to read in the model
-#fit <- TRUE
+# Set up and data prep ----
+fit <- TRUE # Set to TRUE to fit the model, starts at line 67, FALSE to read in the model
 
 # Load seasonal distance data ----
-dat <- readRDS(here::here("Data/seasonal_dist.rds")) # Generated in 02_SeasonalDistMetrics.R
+dat <- readRDS(here::here("Data/seasonal_dist_withnas.rds")) # Generated in 02_SeasonalDistMetrics.R
 
 # Duplicated seasonal distances right now, some filtering
 dat <- dat |>
@@ -47,18 +48,14 @@ soe_24 <- species_groupings |>
 
 # One missing?
 unique(dat$comname)[!unique(dat$comname) %in% soe_24$comname]
-
-add <- data.frame(comname = "windowpane flounder", soe_24 = "benthivore")
+add <- data.frame(comname = c("lanternfish (unclassified)", "windowpane flounder"), soe_24 = c("planktivore", "benthivore"))
+# add <- data.frame(comname = "windowpane flounder", soe_24 = "benthivore")
 
 soe_24 <- bind_rows(soe_24, add)
 
 dat_mod <- dat |>
     left_join(soe_24) |>
-<<<<<<< HEAD:Code/04_BayesSeasonalDistDiffMods.R
-    filter(!comname == "sea scallop") # Sea scallops -- removing these for now.
-=======
-    filter(!soe_24 == "benthos") # Sea scallops -- removing these for now.
->>>>>>> bd_working:Code/03_BayesSeasonalDistDiffMods.R
+    filter(!comname == "sea scallop")
 
 # Some final naming/tidying
 dat_mod <- dat_mod |>
@@ -72,11 +69,9 @@ summary(dat_mod)
 t <- dat_mod |> filter(is.na(dist_km))
 t
 
+# Model fitting ----
 
-#------------
-## Temp
-#------------
-
+## Temp stuff
 # priors <- c(
 #   # Population-level
 #   prior(normal(0, 5), class = "b", coef = "delta_year_day"),
@@ -101,9 +96,6 @@ t
 # default_prior(mod_brms)
 # stancode(mod_brms)
 # summary(mod_brms)
-
-
-#------------
 
 priors <- c(
   # Population-level
@@ -130,10 +122,10 @@ if (fit) { # Fit the model using brms (takes about an hour on my computer)
         control = list(adapt_delta = 0.999, max_treedepth = 15)
     )
 
-    write_rds(mod_brms, file = "Results/Fit_Mods/seasonal_dist_brms.rds", compress = "gz") # Write out the model file to disk.
+    write_rds(mod_brms, file = "Results/Fit_Mods/seasonal_dist_brms_nas.rds", compress = "gz") # Write out the model file to disk.
     # mod_brms <- readRDS("Data/mod_brms1.rds") # Read it in here if you don't want to run the model
 } else {
-    mod_brms <- readRDS("Results/Fit_Mods/seasonal_dist_brms.rds") # Read in the model if you don't want to run it.
+    mod_brms <- readRDS("Results/Fit_Mods/seasonal_dist_brms_nas.rds") # Read in the model if you don't want to run it.
 }
 
 prior_summary(mod_brms) # This is the summary of the priors for the model.
@@ -143,10 +135,7 @@ mod_brms # There are still a few divergent transitions that I wasn't able to get
 pp_check(mod_brms, ndraws = 100) # seems reasonable to me!
 shinystan::launch_shinystan(mod_brms) # This will launch a GUI to interrogate the model.
 
-#--------------------------------------------------------
-## Generate predictions (e.g. figures) from the model
-#---------------------------------------------------------
-
+# Model predictions ----
 formerge <- dat_mod |>
     distinct(comname, functional_group) |>
     mutate(functional_group = str_to_lower(functional_group))
@@ -348,6 +337,7 @@ no_label_plot <- ggplot(nd, aes(x = year, y = ytilda)) +
     labs(y = "Predicted distance between seasonal centroids (km)", x = "") +
     coord_cartesian(xlim = c(1970, 2025), clip = "off") + # 🔑 allows labels to go outside the panel
     theme(plot.margin = margin(5.5, 50, 5.5, 5.5)) # 👈 adds right margin space
+no_label_plot
 ggsave("Figures/FG_temporaltrends_NoLabels.png", no_label_plot, width = 11, height = 11, dpi = )
 
 
@@ -445,29 +435,199 @@ ggsave("Figures/Species_temporaltrends.png", width = 25, height = 15, dpi = 300)
 
 # Coef plot: here, I do a little wrangling with the mod_brms posteriors to get at the coefficients (e.g the slope estimate [beta = year.cont*comname]) for the change in seasonal distance OVER TIME for each species nested within functional group.
 
-nd %>% 
-  filter(comname %in% c("Alewife", "Longfin squid", "Jonah crab")) %>%
-  ggplot(aes(x = year, y = ytilda)) +
-  geom_point(
-    data = dat_mod %>%
-      filter(comname %in%c("Alewife", "Longfin squid", "Jonah crab")) %>%
-      mutate(functional_group = str_to_sentence(functional_group)),
-    aes(x = year, y = dist_km, color = functional_group),
-    size = 0.9, show.legend = FALSE, na.rm = TRUE
-  ) +
-  geom_line(
-    aes(color = functional_group), show.legend = FALSE, na.rm = TRUE
-  ) +
-  geom_ribbon(
-    aes(ymin = .lower, ymax = .upper), alpha = 0.1, na.rm = TRUE
-  ) +
-  scale_color_manual(values = colors) +
-  scale_x_continuous(breaks = seq(from = 1970, to = 2023, by = 10)) +
-  ylim(c(0, 600)) +
-  facet_wrap(~comname, nrow = 3) +
-  labs(y = "Distance (km)", x = "") +
-  theme_minimal(base_size = 16) +
-  theme(plot.title = element_text(hjust = 0.5))
+out <- mod_brms %>%
+    spread_draws(`r_functional_group:comname`[string, param_type]) %>% # Funky data wrangling. Unfortunately, this leaves a period in the common names which might curse us later, but going to avoid dealing with it for now.
+    separate(string, into = c("functional_group", "species"), sep = "_") %>%
+    filter(param_type == "year.cont")
+
+# Build out the coeffiencient plot.
+out_table <- out %>%
+    group_by(species, functional_group) %>%
+    tidybayes::median_qi(`r_functional_group:comname`, .width = c(0.75, 0.95))
+
+# Common name to sentence case for plotting purposes
+out_table <- out_table %>%
+    mutate(
+        comname = gsub("\\.", " ", species),
+        comname = str_to_sentence(comname)
+    )
+
+# No colors
+out_table %>%
+    ggplot(aes(x = `r_functional_group:comname`, y = forcats::fct_reorder(species, `r_functional_group:comname`))) +
+    geom_pointinterval(aes(xmin = .lower, xmax = .upper)) +
+    geom_vline(xintercept = 0, linetype = 3, color = "gray") +
+    labs(x = "Change in seasonal distance over time", y = "Species") +
+    theme_classic()
+ggsave("Figures/Species_coefplot.png")
+
+# Adding in average seasonal distance?
+# Suppose you have avg spring-fall distances per species
+dat <- dat %>%
+    mutate(
+        comname = str_to_sentence(comname)
+    )
+avg_dist <- dat %>%
+    group_by(comname) %>%
+    summarize(mean_dist = mean(dist_km)) |>
+    mutate(dist_group = cut(
+        mean_dist,
+        breaks = quantile(mean_dist, probs = c(0, 0.25, 0.75, 1), na.rm = TRUE),
+        include.lowest = TRUE,
+        labels = c("Short (0–25%)", "Medium (25–75%)", "Long (75–100%)")
+    )) # Replace spaces with periods to match the coef plot species names
+
+# Join into slope/interval summary
+out_table <- out_table %>%
+    left_join(avg_dist)
+
+# Plot slopes + intervals with color = average distance
+cols <- c("#ece2f0", "#a6bddb", "#1c9099")
+#cols<- c("#7f3c8d", "#11a579", "#e68310")
+out_table <- out_table %>%
+    mutate(
+        species = gsub("\\.", " ", species),
+        species = str_to_sentence(comname),
+        functional_group = case_when(
+            functional_group == "piscivore" ~ "Piscivore",
+            functional_group == "planktivore" ~ "Planktivore",
+            functional_group == "benthivore" ~ "Benthivore"
+        )
+    )
+out_table %>%
+    ggplot(aes(
+        x = `r_functional_group:comname`,
+        y = forcats::fct_reorder(species, `r_functional_group:comname`),
+        color = dist_group
+    )) +
+    geom_pointinterval(aes(xmin = .lower, xmax = .upper)) +
+    geom_vline(xintercept = 0, linetype = 3, color = "gray") +
+    scale_color_manual(
+        values = c(
+            "Short (0–25%)" = cols[1],
+            "Medium (25–75%)" = cols[2],
+            "Long (75–100%)" = cols[3]
+        ),
+        labels = c(
+            "Short (28 – 65 km)",
+            "Medium (66 – 160 km)",
+            "Long (161 – 358 km)"
+        )
+    ) +
+    labs(
+        x = "Change in seasonal distance over time",
+        y = "Species",
+        color = "Avg. spring–fall\ndistance"
+    ) +
+    theme_classic()
+ggsave("Figures/Species_coefplot_plusdist.png", height = 8, width = 11, dpi = 300)
+# Save it
+write.csv(out_table, "Results/seasonal_dist_coefplot.csv", row.names = FALSE)
+
+# Get min/mean/max change for positive slopes and then for negative slopes
+out_table %>%
+    filter(`r_functional_group:comname` > 0) %>%
+    summarize(
+        min_change = min(`r_functional_group:comname`),
+        mean_change = mean(`r_functional_group:comname`),
+        max_change = max(`r_functional_group:comname`)
+    )
+
+out_table %>%
+    filter(`r_functional_group:comname` < 0) %>%
+    summarize(
+        min_change = min(`r_functional_group:comname`),
+        mean_change = mean(`r_functional_group:comname`),
+        max_change = max(`r_functional_group:comname`)
+    )
+
+# Multi-panel figure: Coefficient plot + individual species examples
+# Save coefficient plot as object for multi-panel figure
+coef_plot <- out_table %>%
+    ggplot(aes(
+        x = `r_functional_group:comname`,
+        y = forcats::fct_reorder(species, `r_functional_group:comname`),
+        color = dist_group
+    )) +
+    geom_pointinterval(aes(xmin = .lower, xmax = .upper)) +
+    geom_vline(xintercept = 0, linetype = 3, color = "gray") +
+    scale_color_manual(
+        values = c(
+            "Short (0–25%)" = cols[1],
+            "Medium (25–75%)" = cols[2],
+            "Long (75–100%)" = cols[3]
+        ),
+        labels = c(
+            "Short (28 – 65 km)",
+            "Medium (66 – 160 km)",
+            "Long (161 – 358 km)"
+        )
+    ) +
+    labs(
+        x = "Change in seasonal distance over time",
+        y = "Species",
+        color = "Avg. spring–fall\ndistance",
+        tag = "A"
+    ) +
+    theme_classic()
+
+# Create individual species plots
+species_to_plot <- c("Alewife", "Longfin squid", "Jonah crab")
+panel_labels <- c("B", "C", "D")
+
+# Function to create individual species plot
+create_species_plot <- function(species_name, label) {
+    # Get the functional group for this species
+    fg <- nd %>% filter(comname == species_name) %>% pull(functional_group) %>% unique()
+    color_idx <- which(unique(nd$functional_group) == fg)
+
+    # Filter data
+    nd_sp <- nd %>% filter(comname == species_name)
+    dat_sp <- dat_mod %>% filter(comname == species_name)
+
+    # Create plot
+    ggplot(nd_sp, aes(x = year, y = ytilda)) +
+        geom_point(
+            data = dat_sp,
+            aes(x = year, y = dist_km, color = functional_group),
+            size = 2,
+            show.legend = FALSE
+        ) +
+        geom_line(aes(color = functional_group), linewidth = 1, show.legend = FALSE) +
+        geom_ribbon(aes(ymin = .lower, ymax = .upper), alpha = 0.1) +
+        scale_color_manual(values = colors[color_idx]) +
+        scale_x_continuous(breaks = seq(from = 1970, to = 2023, by = 10)) +
+        ylim(c(0, 600)) +
+        labs(
+            y = "Distance (km)",
+            x = "",
+            title = species_name,
+            tag = label
+        ) +
+        theme_classic() +
+        theme(
+            plot.title = element_text(hjust = 0.5, face = "italic"),
+            plot.tag = element_text(face = "bold", size = 14)
+        )
+}
+
+# Create the three individual plots
+plot_b <- create_species_plot("Alewife", "B")
+plot_c <- create_species_plot("Longfin squid", "C")
+plot_d <- create_species_plot("Jonah crab", "D")
+
+# Combine into multi-panel figure
+library(patchwork)
+multipanel_fig <- coef_plot + (plot_b / plot_c / plot_d) +
+    plot_layout(widths = c(2, 1))
+multipanel_fig
+
+# Save the multi-panel figure
+ggsave("Figures/Multipanel_coef_species.png",
+       plot = multipanel_fig,
+       height = 10,
+       width = 14,
+       dpi = 300)
 
 
 

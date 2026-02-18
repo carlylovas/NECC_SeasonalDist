@@ -15,6 +15,9 @@ library(rnaturalearth)
 library(rnaturalearthhires)
 library(sf)
 
+# Initial data cut off for tows
+cut<- 0.75 # Percent of tows to keep a species, 0.75 add cusk and lanternfish that are a problem
+
 # Load and preliminary cleaning of raw data ----
 survdat <- readRDS(here::here("Data/survdat_lw.rds"))$survdat |>
     as.data.frame()
@@ -88,17 +91,25 @@ dat_clean <- trawldat |>
     ungroup()
 
 # Species filtering ----
+# Positive biomass tows by species, year, and season
+tow_spp_raw <- dat_clean |>
+    filter(total_biomass_kg > 0) |>
+    group_by(svspp, comname, year, season) |>
+    summarise(tows = n_distinct(id))
+summary(tow_spp_raw)
+
 # Keep only species that were observed in at least 5 tows for each season and then in both seasons for at least 80% of survey years.
 tow_spp <- dat_clean |>
+    filter(total_biomass_kg > 0) |>
     group_by(svspp, comname, year, season) |>
     summarise(tows = n_distinct(id)) |>
     filter(tows >= 5)
 
-# 80% cut off (49 years)
-cut <- (max(tow_spp$year) - min(tow_spp$year)) - floor(0.08 * (max(tow_spp$year) - min(tow_spp$year)))
+# Make the cut
+cut <- (max(tow_spp$year) - min(tow_spp$year)) - floor((1-cut) * (max(tow_spp$year) - min(tow_spp$year)))
 
 tow_seas_spp <- tow_spp |>
-    # 80% of years have both spring and fall
+    # x% of years have both spring and fall
     group_by(svspp, comname, year) |>
     summarise(seasons = n_distinct(season)) |>
     filter(seasons == 2) |>
@@ -110,10 +121,13 @@ tow_seas_spp <- tow_spp |>
 dat_out <- dat_clean |>
     filter(!year %in% c(2017, 2020))
 
-
 # Summaries and saving prepped data ----
 dat_out <- dat_out |>
-    filter(comname %in% tow_seas_spp$comname)
+    filter(comname %in% tow_seas_spp$comname) # This was keeping cusk and lanternfish with problematic years
+
+# dat_out <- dat_out |>
+#     semi_join(tow_spp, by = c("svspp", "comname", "year", "season")) |>
+#     filter(comname %in% tow_seas_spp$comname)
 
 # Quick time series by season/species of total catch
 ts_dat <- dat_out |>
@@ -132,6 +146,7 @@ saveRDS(dat_out, here::here("Data/dat_clean.rds"))
 year_day <- dat_out |>
     mutate(year_day = lubridate::yday(est_towdate)) |>
     select(year, season, year_day, id)
+summary(year_day)
 
 delta_year_day <- year_day |>
     group_by(year, season) |>
@@ -140,9 +155,6 @@ delta_year_day <- year_day |>
     mutate(delta_year_day = (Fall - Spring))
 
 saveRDS(delta_year_day, here::here("Data/trawl_yearday_diff.rds"))
-
-
-rm(list = ls())
 
 # Quick sample map of the data and timeseries of median trawl day by season
 dat <- readRDS(here::here("Data/dat_clean.rds"))
@@ -194,4 +206,5 @@ ts <- ggplot(delta_year_day, aes(x = year)) +
     theme_bw(base_size = 16)
 
 samp_map_out <- map / ts + plot_layout(ncol = 1, heights = c(2, 1), widths = c(2, 1))
+samp_map_out
 ggsave(here::here("Figures/SurveyMap_TrawlDayTimeseries.png"), samp_map_out, width = 11, height = 8, units = "in", dpi = 300)
