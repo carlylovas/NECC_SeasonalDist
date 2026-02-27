@@ -1,54 +1,44 @@
-Functional Group,Species,Fall mean (LCI - UCI),Spring mean (LCI - UCI),Fall - Spring Difference (LCI - UCI),Shift Pattern,Dynamics
-Benthivore,alligatorfish,-0.07 (-0.16 - 0.03),-0.09 (-0.18 - -0.01),0.03 (-0.10 - 0.16),Unclear,Spring moving only
-Benthivore,american lobster,0.42 (0.34 - 0.50),0.52 (0.44 - 0.60),-0.10 (-0.21 - 0.02),Marching,Both moving
-Benthivore,american plaice,-0.01 (-0.04 - 0.02),-0.04 (-0.07 - -0.00),0.02 (-0.02 - 0.07),Unclear,Spring moving only
-Benthivore,atlantic rock crab,0.05 (-0.10 - 0.20),0.54 (0.39 - 0.68),-0.49 (-0.70 - -0.28),Converging,Spring moving only
-Benthivore,black sea bass,0.74 (0.60 - 0.88),0.58 (0.44 - 0.72),0.16 (-0.04 - 0.36),Marching,Both moving
-Benthivore,cunner,0.14 (0.07 - 0.21),0.33 (0.26 - 0.40),-0.19 (-0.29 - -0.09),Converging,Both moving
-Benthivore,fawn cusk-eel,-0.06 (-0.14 - 0.03),0.02 (-0.06 - 0.10),-0.08 (-0.19 - 0.04),Stable,Unclear
-Benthivore,fourbeard rockling,0.08 (0.01 - 0.15),0.16 (0.08 - 0.23),-0.08 (-0.18 - 0.03),Marching,Both moving
-Benthivore,gulf stream flounder,-0.04 (-0.13 - 0.04),0.01 (-0.08 - 0.09),-0.05 (-0.17 - 0.06),Stable,Unclear
-Benthivore,haddock,-0.13 (-0.18 - -0.08),-0.11 (-0.16 - -0.06),-0.02 (-0.09 - 0.04),Marching,Both moving
-Benthivore,horseshoe crab,0.02 (-0.08 - 0.12),-0.02 (-0.13 - 0.08),0.05 (-0.10 - 0.19),Stable,Unclear
-Benthivore,jonah crab,0.30 (0.15 - 0.44),0.53 (0.38 - 0.68),-0.24 (-0.45 - -0.03),Converging,Both moving
-Benthivore,little skate,-0.03 (-0.07 - 0.01),-0.04 (-0.08 - 0.00),0.01 (-0.05 - 0.07),Stable,Unclear
-Benthivore,longhorn sculpin,0.12 (0.09 - 0.15),0.14 (0.11 - 0.18),-0.03 (-0.07 - 0.02),Marching,Both moving
-Benthivore,northern searobin,0.32 (0.21 - 0.44),0.13 (0.01 - 0.25),0.19 (0.03 - 0.36),Diverging,Both moving
-Benthivore,ocean pout,0.01 (-0.05 - 0.07),0.16 (0.10 - 0.22),-0.14 (-0.23 - -0.06),Converging,Spring moving only
-Benthivore,scup,0.51 (0.29 - 0.72),0.64 (0.42 - 0.85),-0.13 (-0.43 - 0.18),Marching,Both moving
-Benthivore,smooth dogfish,0.30 (0.15 - 0.45),0.22 (0.08 - 0.37),0.07 (-0.13 - 0.28),Marching,Both moving
-Benthivore,smooth skate,0.06 (0.01 - 0.11),0.03 (-0.02 - 0.09),0.03 (-0.04 - 0.10),Unclear,Fall moving only
-Benthivore,striped searobin,0.31 (0.16 - 0.46),0.27 (0.11 - 0.43),0.04 (-0.18 - 0.26),Marching,Both moving
-Benthivore,windowpane flounder,0.08 (0.02 - 0.14),0.05 (-0.01 - 0.11),0.03 (-0.06 - 0.11),Unclear,Fall moving only
-Benthivore,winter flounder,0.04 (-0.01 - 0.09),0.12 (0.07 - 0.17),-0.08 (-0.15 - -0.01),Converging,Spring moving only
-Benthivore,witch flounder,-0.01 (-0.07 - 0.05),-0.13 (-0.19 - -0.07),0.12 (0.03 - 0.21),Diverging,Spring moving only
-Benthivore,yellowtail flounder,0.20 (0.15 - 0.25),0.31 (0.26 - 0.36),-0.11 (-0.18 - -0.04),Converging,Both moving
-Piscivore,acadian redfish,-0.03 (-0.08 - 0.02),-0.04 (-0.09 - 0.01),0.01 (-0.06 - 0.08),Stable,Unclear
-Piscivore,atlantic cod,-0.02 (-0.06 - 0.01),0.07 (0.04 - 0.11),-0.10 (-0.15 - -0.05),Converging,Spring moving only
-Piscivore,clearnose skate,0.26 (0.18 - 0.35),0.18 (0.08 - 0.28),0.08 (-0.04 - 0.21),Marching,Both moving
-Piscivore,cusk,-0.04 (-0.09 - 0.00),-0.13 (-0.18 - -0.09),0.09 (0.02 - 0.15),Diverging,Spring moving only
-Piscivore,fourspot flounder,0.01 (-0.03 - 0.06),0.04 (0.00 - 0.08),-0.03 (-0.09 - 0.03),Unclear,Spring moving only
-Piscivore,goosefish,0.03 (-0.07 - 0.13),0.22 (0.12 - 0.32),-0.19 (-0.33 - -0.05),Converging,Spring moving only
-Piscivore,longfin squid,0.11 (0.01 - 0.22),0.01 (-0.09 - 0.12),0.10 (-0.05 - 0.25),Unclear,Fall moving only
-Piscivore,northern shortfin squid,-0.58 (-0.77 - -0.39),0.16 (-0.03 - 0.36),-0.74 (-1.01 - -0.47),Converging,Fall moving only
-Piscivore,offshore hake,-0.31 (-0.46 - -0.15),-0.23 (-0.39 - -0.07),-0.08 (-0.30 - 0.14),Marching,Both moving
-Piscivore,pollock,-0.00 (-0.05 - 0.05),0.05 (0.00 - 0.10),-0.05 (-0.12 - 0.02),Unclear,Spring moving only
-Piscivore,red hake,0.17 (0.11 - 0.24),0.30 (0.23 - 0.36),-0.12 (-0.22 - -0.03),Converging,Both moving
-Piscivore,sea raven,-0.01 (-0.05 - 0.03),0.05 (0.00 - 0.09),-0.06 (-0.12 - 0.00),Unclear,Spring moving only
-Piscivore,silver hake,0.14 (0.06 - 0.22),0.37 (0.29 - 0.45),-0.23 (-0.35 - -0.12),Converging,Both moving
-Piscivore,spiny dogfish,0.06 (-0.07 - 0.20),-0.15 (-0.29 - -0.01),0.22 (0.02 - 0.41),Diverging,Spring moving only
-Piscivore,spotted hake,0.38 (0.24 - 0.52),0.34 (0.20 - 0.47),0.05 (-0.15 - 0.24),Marching,Both moving
-Piscivore,summer flounder,0.34 (0.24 - 0.43),0.27 (0.18 - 0.36),0.07 (-0.06 - 0.20),Marching,Both moving
-Piscivore,thorny skate,-0.03 (-0.07 - 0.02),-0.03 (-0.07 - 0.01),0.00 (-0.05 - 0.06),Stable,Unclear
-Piscivore,white hake,0.03 (-0.01 - 0.06),0.07 (0.03 - 0.10),-0.04 (-0.09 - 0.01),Unclear,Spring moving only
-Piscivore,winter skate,-0.01 (-0.05 - 0.03),-0.15 (-0.18 - -0.11),0.14 (0.08 - 0.19),Diverging,Spring moving only
-Planktivore,alewife,-0.02 (-0.11 - 0.08),0.43 (0.34 - 0.52),-0.45 (-0.58 - -0.32),Converging,Spring moving only
-Planktivore,american shad,0.09 (-0.07 - 0.25),0.43 (0.27 - 0.59),-0.34 (-0.56 - -0.11),Converging,Spring moving only
-Planktivore,atlantic herring,-0.02 (-0.12 - 0.08),0.08 (-0.02 - 0.18),-0.10 (-0.25 - 0.04),Stable,Unclear
-Planktivore,atlantic mackerel,0.13 (-0.01 - 0.27),0.42 (0.27 - 0.57),-0.29 (-0.49 - -0.09),Converging,Spring moving only
-Planktivore,bay anchovy,0.19 (-0.03 - 0.41),0.03 (-0.21 - 0.27),0.17 (-0.16 - 0.49),Stable,Unclear
-Planktivore,blackbelly rosefish,0.61 (0.40 - 0.83),0.59 (0.38 - 0.81),0.02 (-0.28 - 0.33),Marching,Both moving
-Planktivore,blueback herring,0.53 (0.23 - 0.82),0.43 (0.14 - 0.72),0.10 (-0.31 - 0.51),Marching,Both moving
-Planktivore,butterfish,0.19 (0.02 - 0.35),0.26 (0.10 - 0.43),-0.08 (-0.31 - 0.16),Marching,Both moving
-Planktivore,lanternfish (unclassified),0.02 (-0.29 - 0.34),0.08 (-0.23 - 0.39),-0.06 (-0.50 - 0.40),Stable,Unclear
-Planktivore,northern sand lance,-0.01 (-0.20 - 0.19),0.38 (0.18 - 0.57),-0.38 (-0.65 - -0.11),Converging,Spring moving only
+Functional Group,Species,Fall mean (LCI - UCI),Spring mean (LCI - UCI),Fall - Spring Difference (LCI - UCI),Shift Pattern,Mechanism
+Benthivore,american plaice,0.01 (-0.02 - 0.05),-0.01 (-0.04 - 0.03),0.02 (-0.03 - 0.07),Stable,Neither moving
+Benthivore,atlantic hagfish,-0.12 (-0.31 - 0.08),0.54 (0.35 - 0.74),-0.66 (-0.93 - -0.38),Converging,Spring moving only
+Benthivore,black sea bass,0.50 (0.34 - 0.66),0.54 (0.38 - 0.71),-0.04 (-0.27 - 0.18),Marching,Both moving
+Benthivore,cunner,0.09 (0.01 - 0.16),0.29 (0.21 - 0.36),-0.20 (-0.31 - -0.09),Converging,Both moving
+Benthivore,fawn cusk-eel,-0.08 (-0.16 - -0.01),0.03 (-0.05 - 0.11),-0.11 (-0.22 - -0.01),Converging,Fall moving only
+Benthivore,fourbeard rockling,0.08 (-0.00 - 0.16),0.12 (0.05 - 0.20),-0.05 (-0.16 - 0.06),Unclear,Spring moving only
+Benthivore,gulf stream flounder,-0.05 (-0.13 - 0.02),0.00 (-0.07 - 0.08),-0.06 (-0.17 - 0.05),Stable,Neither moving
+Benthivore,haddock,-0.04 (-0.08 - 0.00),0.01 (-0.03 - 0.05),-0.05 (-0.11 - 0.01),Stable,Neither moving
+Benthivore,little skate,-0.05 (-0.09 - -0.01),-0.03 (-0.07 - 0.01),-0.02 (-0.07 - 0.03),Unclear,Fall moving only
+Benthivore,longhorn sculpin,0.13 (0.09 - 0.16),0.11 (0.08 - 0.15),0.01 (-0.03 - 0.06),Marching,Both moving
+Benthivore,northern searobin,0.20 (0.06 - 0.34),0.12 (-0.02 - 0.26),0.08 (-0.11 - 0.28),Unclear,Fall moving only
+Benthivore,ocean pout,0.03 (-0.03 - 0.09),0.15 (0.09 - 0.21),-0.12 (-0.20 - -0.04),Converging,Spring moving only
+Benthivore,scup,0.02 (-0.18 - 0.22),0.46 (0.25 - 0.66),-0.44 (-0.73 - -0.15),Converging,Spring moving only
+Benthivore,smooth skate,0.10 (0.05 - 0.15),0.06 (0.01 - 0.11),0.04 (-0.03 - 0.11),Marching,Both moving
+Benthivore,windowpane flounder,-0.02 (-0.06 - 0.03),0.05 (0.00 - 0.10),-0.06 (-0.13 - 0.00),Unclear,Spring moving only
+Benthivore,winter flounder,0.07 (0.02 - 0.11),0.11 (0.06 - 0.16),-0.04 (-0.11 - 0.02),Marching,Both moving
+Benthivore,witch flounder,0.03 (-0.04 - 0.09),-0.10 (-0.17 - -0.04),0.13 (0.04 - 0.22),Diverging,Spring moving only
+Benthivore,yellowtail flounder,0.20 (0.15 - 0.26),0.28 (0.22 - 0.33),-0.07 (-0.15 - 0.00),Marching,Both moving
+Piscivore,acadian redfish,0.00 (-0.05 - 0.05),-0.01 (-0.06 - 0.04),0.01 (-0.06 - 0.07),Stable,Neither moving
+Piscivore,atlantic cod,0.02 (-0.02 - 0.05),0.11 (0.08 - 0.15),-0.09 (-0.14 - -0.04),Converging,Spring moving only
+Piscivore,cusk,-0.03 (-0.07 - 0.02),-0.12 (-0.17 - -0.08),0.10 (0.03 - 0.16),Diverging,Spring moving only
+Piscivore,fourspot flounder,0.00 (-0.04 - 0.05),0.04 (-0.00 - 0.08),-0.03 (-0.09 - 0.02),Stable,Neither moving
+Piscivore,goosefish,0.06 (-0.04 - 0.15),0.17 (0.08 - 0.26),-0.11 (-0.24 - 0.02),Unclear,Spring moving only
+Piscivore,longfin squid,0.04 (-0.06 - 0.13),0.00 (-0.10 - 0.10),0.03 (-0.10 - 0.17),Stable,Neither moving
+Piscivore,northern shortfin squid,-0.49 (-0.67 - -0.31),0.13 (-0.04 - 0.31),-0.63 (-0.88 - -0.37),Converging,Fall moving only
+Piscivore,offshore hake,-0.29 (-0.44 - -0.14),-0.22 (-0.37 - -0.06),-0.07 (-0.29 - 0.14),Marching,Both moving
+Piscivore,pollock,0.03 (-0.01 - 0.08),0.08 (0.03 - 0.13),-0.05 (-0.11 - 0.02),Unclear,Spring moving only
+Piscivore,red hake,0.18 (0.12 - 0.25),0.28 (0.21 - 0.35),-0.10 (-0.20 - -0.00),Converging,Both moving
+Piscivore,sea raven,0.05 (0.00 - 0.09),0.09 (0.05 - 0.14),-0.04 (-0.11 - 0.02),Marching,Both moving
+Piscivore,silver hake,0.18 (0.10 - 0.27),0.41 (0.33 - 0.49),-0.23 (-0.35 - -0.11),Converging,Both moving
+Piscivore,spiny dogfish,0.05 (-0.08 - 0.19),-0.13 (-0.26 - 0.01),0.18 (-0.01 - 0.37),Stable,Neither moving
+Piscivore,spotted hake,0.33 (0.21 - 0.44),0.23 (0.12 - 0.35),0.10 (-0.07 - 0.26),Marching,Both moving
+Piscivore,summer flounder,0.20 (0.11 - 0.29),0.19 (0.10 - 0.28),0.01 (-0.11 - 0.14),Marching,Both moving
+Piscivore,thorny skate,0.00 (-0.04 - 0.05),-0.00 (-0.05 - 0.05),0.01 (-0.06 - 0.07),Stable,Neither moving
+Piscivore,white hake,0.05 (0.01 - 0.08),0.08 (0.04 - 0.11),-0.03 (-0.08 - 0.02),Marching,Both moving
+Piscivore,winter skate,0.01 (-0.02 - 0.04),-0.10 (-0.12 - -0.07),0.11 (0.07 - 0.15),Diverging,Spring moving only
+Planktivore,alewife,0.09 (-0.01 - 0.18),0.43 (0.33 - 0.52),-0.34 (-0.47 - -0.21),Converging,Spring moving only
+Planktivore,american shad,0.13 (-0.02 - 0.27),0.38 (0.23 - 0.52),-0.25 (-0.46 - -0.05),Converging,Spring moving only
+Planktivore,atlantic herring,-0.03 (-0.15 - 0.09),0.03 (-0.09 - 0.15),-0.06 (-0.23 - 0.10),Stable,Neither moving
+Planktivore,atlantic mackerel,0.16 (0.03 - 0.29),0.32 (0.19 - 0.45),-0.16 (-0.35 - 0.02),Marching,Both moving
+Planktivore,blackbelly rosefish,0.58 (0.41 - 0.74),0.62 (0.46 - 0.78),-0.04 (-0.28 - 0.19),Marching,Both moving
+Planktivore,butterfish,0.04 (-0.13 - 0.20),0.19 (0.03 - 0.36),-0.16 (-0.40 - 0.08),Unclear,Spring moving only
+Planktivore,lanternfish (unclassified),-0.14 (-0.43 - 0.15),-0.03 (-0.31 - 0.25),-0.11 (-0.50 - 0.29),Stable,Neither moving

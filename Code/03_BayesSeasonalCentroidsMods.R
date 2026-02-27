@@ -12,7 +12,7 @@ library(plotly)
 library(ggrepel)
 
 # Set up and data prep ----
-fit_mod<- TRUE # Set to false if already done to avoid refitting
+fit_mod<- FALSE # Set to false if already done to avoid refitting
 
 # Load data with biomass weighted cog lat/lon ----
 dat <- readRDS(here::here("Data/seasonal_dist_withnas.rds")) # Generated in 02_SeasonalDistMetrics.R
@@ -171,23 +171,24 @@ dat_mod <- dat_mod %>%
             # You might want a separate category for these
             TRUE ~ "Unclear"
         ),
-        Dynamics = case_when(
+        Mechanism = case_when(
             !fall_ci_excludes_0 & spring_ci_excludes_0 ~ "Spring moving only",
             fall_ci_excludes_0 & !spring_ci_excludes_0 ~ "Fall moving only",
             fall_ci_excludes_0 & spring_ci_excludes_0 ~ "Both moving",
-            TRUE ~ "Unclear"
+            TRUE ~ "Neither moving"
         )
     )
 
 # Unnest and Plot
 dat_plot <- dat_mod %>%
-    select(comname, summary_lat, shift_pattern, Dynamics) %>%
+    select(comname, summary_lat, shift_pattern, Mechanism) %>%
     unnest(summary_lat) |>
     left_join(soe_24)
 
 dat_plot <- dat_plot %>%
     mutate(
-        shift_pattern = factor(shift_pattern, levels = c("Stable", "Marching", "Converging", "Diverging", "Unclear"))
+        shift_pattern = factor(shift_pattern, levels = c("Marching", "Converging", "Diverging", "Stable", "Unclear")),
+        Mechanism = factor(Mechanism, levels = c("Both moving", "Fall moving only", "Spring moving only", "Neither moving"))
     )
 
 # Work on soe_24_clean labels
@@ -198,7 +199,7 @@ dat_plot <- dat_plot %>%
             soe_24 == "piscivore" ~ "Piscivore",
             soe_24 == "benthivore" ~ "Benthivore"
         ),
-        Dyanmics = Dynamics
+        Mechanism = Mechanism
     )
 
 
@@ -219,29 +220,30 @@ results_table <- dat_plot %>%
         `Spring mean (LCI - UCI)`,
         `Fall - Spring Difference (LCI - UCI)`,
         `Shift Pattern` = shift_pattern,
-        Dynamics
+        Mechanism
     ) %>%
     arrange(`Functional Group`, Species)
 
 # Save formatted table
 write_csv(results_table, here::here("Results/seasonal_centroid_results_formatted_nas.csv"))
 
-ggplot(dat_plot, aes(x = fall_mean, y = spring_mean, color = Dynamics, shape = `Functional Group`)) +
+ggplot(dat_plot, aes(x = fall_mean, y = spring_mean, color = Mechanism, shape = `Functional Group`)) +
     geom_hline(yintercept = 0, linetype = "dashed", color = "gray") +
     geom_vline(xintercept = 0, linetype = "dashed", color = "gray") +
     geom_abline(slope = 1, intercept = 0, linetype = "dotted", color = "black") +
     geom_errorbar(aes(ymin = spring_lower, ymax = spring_upper), alpha = 0.4) +
     geom_errorbarh(aes(xmin = fall_lower, xmax = fall_upper), alpha = 0.4) +
     geom_point(size = 2.5) +
-    facet_wrap(~shift_pattern, nrow = 1) +
+    facet_wrap(~shift_pattern, nrow = 2) +
+    coord_equal() +
     labs(
-        x = "Fall trend (° latitude/year)",
-        y = "Spring trend (° latitude/year)",
+        x = "Fall trend (°latitude/decade)",
+        y = "Spring trend (°latitude/decade)",
         title = "Seasonal centroid shift patterns by species",
         subtitle = "With 95% credible intervals"
     ) +
-    theme_minimal()
-ggsave("Figures/SpeciesSeasonalTrends.jpg", width = 11, height = 8, dpi = 300)
+    theme_minimal(base_size = 18)
+ggsave("Figures/SpeciesSeasonalTrends.jpg", width = 15, height = 8, dpi = 300)
 
 # Highlihgting species
 dat_plot$alpha_highlight <- ifelse(dat_plot$comname %in% c("alewife", "black sea bass"), 1, 0.6)
@@ -250,14 +252,14 @@ label_data <- subset(dat_plot, comname %in% c("alewife", "black sea bass"))
 
 # Manually set label positions - adjust these coordinates as needed
 label_data$label_x <- ifelse(label_data$comname == "alewife",
-                              -0.185,  # alewife x position
-                              0.22)  # black sea bass x position
+                              0.35,  # alewife x position
+                              0)  # black sea bass x position
 label_data$label_y <- ifelse(label_data$comname == "alewife",
-                              0.39,   # alewife y position
-                              0.48)   # black sea bass y position
+                              0.6,   # alewife y position
+                              0.59)   # black sea bass y position
 
 
-out<- ggplot(dat_plot, aes(x = fall_mean, y = spring_mean, color = Dynamics, shape = `Functional Group`, alpha = alpha_highlight)) +
+out<- ggplot(dat_plot, aes(x = fall_mean, y = spring_mean, color = Mechanism, shape = `Functional Group`, alpha = alpha_highlight)) +
     geom_hline(yintercept = 0, linetype = "dashed", color = "gray") +
     geom_vline(xintercept = 0, linetype = "dashed", color = "gray") +
     geom_abline(slope = 1, intercept = 0, linetype = "dotted", color = "black") +
@@ -265,11 +267,11 @@ out<- ggplot(dat_plot, aes(x = fall_mean, y = spring_mean, color = Dynamics, sha
     geom_errorbarh(aes(xmin = fall_lower, xmax = fall_upper)) +
     geom_point(data = subset(dat_plot, comname %in% c("alewife", "black sea bass")),
                size = 3.5, color = "black") +
-    geom_point(size = 2.5) +
+    geom_point(fill = NA, size = 2.5, stroke = 0.8) +
     ggrepel::geom_text_repel(
         data = label_data,
         aes(label = comname, x = label_x, y = label_y),
-        size = 4,
+        size = 5,
         max.overlaps = 20,
         segment.color = "gray40",
         box.padding = 0.4,
@@ -277,16 +279,17 @@ out<- ggplot(dat_plot, aes(x = fall_mean, y = spring_mean, color = Dynamics, sha
         force_pull = 0,
         show.legend = FALSE
     ) +
-    facet_wrap(~shift_pattern, nrow = 1) +
+    facet_wrap(~shift_pattern, nrow = 2) +
+    coord_equal() +
     labs(
-        x = "Fall trend (° latitude/year)",
-        y = "Spring trend (° latitude/year)"
+        x = "Fall trend (°latitude/decade)",
+        y = "Spring trend (°latitude/decade)"
     ) +
+    scale_shape_manual(values = c("Benthivore" = 21, "Piscivore" = 22, "Planktivore" = 24)) +
     scale_alpha_identity() +
-    theme_minimal(base_size = 16) +
-    theme(legend.position = "bottom")
+    theme_minimal(base_size = 18)
 out
-ggsave("Figures/SpeciesSeasonalTrends_CaseStudies.jpg", out, width = 15, height = 8, dpi = 300)
+ggsave("Figures/SpeciesSeasonalTrends_CaseStudies.jpg", out, width = 11, height = 8, dpi = 300)
 
 # Interactive plot
 # Base ggplot

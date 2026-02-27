@@ -16,7 +16,7 @@ library(rnaturalearthhires)
 library(sf)
 
 # Initial data cut off for tows
-cut<- 0.75 # Percent of tows to keep a species, 0.75 add cusk and lanternfish that are a problem
+cut<- 0.70 # Percent of tows to keep a species, 0.75 add cusk and lanternfish that are a problem
 
 # Load and preliminary cleaning of raw data ----
 survdat <- readRDS(here::here("Data/survdat_lw.rds"))$survdat |>
@@ -83,6 +83,10 @@ trawldat <- dplyr::filter(trawldat, !svspp %in% c(0, "000", 978, 979, 980, 998))
 
 trawldat <- dplyr::filter(trawldat, year >= 1970)
 
+# Remove problem years
+trawldat<- trawldat |>
+    filter(!year %in% c(2017, 2020))
+
 # Getting distinct biomass values at the species level
 dat_clean <- trawldat |>
     distinct(id, svspp, catchsex, comname, year, est_month, est_day, season, lat, lon, est_towdate, biomass_kg) |>
@@ -91,25 +95,14 @@ dat_clean <- trawldat |>
     ungroup()
 
 # Species filtering ----
-# Positive biomass tows by species, year, and season
-tow_spp_raw <- dat_clean |>
-    filter(total_biomass_kg > 0) |>
-    group_by(svspp, comname, year, season) |>
-    summarise(tows = n_distinct(id))
-summary(tow_spp_raw)
+# Keep only species observed in >= 5 tows per season, in both seasons, for >= cut years
+cut <- (max(dat_clean$year) - min(dat_clean$year)) - floor((1 - cut) * (max(dat_clean$year) - min(dat_clean$year)))
 
-# Keep only species that were observed in at least 5 tows for each season and then in both seasons for at least 80% of survey years.
-tow_spp <- dat_clean |>
+tow_seas_spp <- dat_clean |>
     filter(total_biomass_kg > 0) |>
     group_by(svspp, comname, year, season) |>
     summarise(tows = n_distinct(id)) |>
-    filter(tows >= 5)
-
-# Make the cut
-cut <- (max(tow_spp$year) - min(tow_spp$year)) - floor((1-cut) * (max(tow_spp$year) - min(tow_spp$year)))
-
-tow_seas_spp <- tow_spp |>
-    # x% of years have both spring and fall
+    filter(tows >= 5) |>
     group_by(svspp, comname, year) |>
     summarise(seasons = n_distinct(season)) |>
     filter(seasons == 2) |>
@@ -117,14 +110,16 @@ tow_seas_spp <- tow_spp |>
     summarise(years = n_distinct(year)) |>
     filter(years >= cut)
 
-# Now cut 2017 and 2020
-dat_out <- dat_clean |>
-    filter(!year %in% c(2017, 2020))
-
 # Summaries and saving prepped data ----
-dat_out <- dat_out |>
+dat_out <- dat_clean |>
     filter(comname %in% tow_seas_spp$comname) # This was keeping cusk and lanternfish with problematic years
+unique(dat_out$comname)
 
+# Filter out crabs/lobster
+spp_out<- c("atlantic rock crab", "jonah crab", "american lobster", "sea scallop")
+dat_out<- dat_out |>
+    filter(!comname %in% spp_out)
+unique(dat_out$comname)
 # dat_out <- dat_out |>
 #     semi_join(tow_spp, by = c("svspp", "comname", "year", "season")) |>
 #     filter(comname %in% tow_seas_spp$comname)

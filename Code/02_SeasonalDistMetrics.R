@@ -74,7 +74,7 @@ seasonal_dist_out <- seasonal_dist |>
   unnest(cols = c(data))
 summary(seasonal_dist_out)
 
-# 15 NAs
+# 3 NAs
 t<- seasonal_dist_out |>
   filter(is.na(dist_m))
 t
