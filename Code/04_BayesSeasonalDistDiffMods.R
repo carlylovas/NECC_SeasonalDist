@@ -57,6 +57,10 @@ dat_mod <- dat |>
     left_join(soe_24) |>
     filter(!comname == "sea scallop")
 
+# Fix lanternfish to remove "(unclassified)"
+dat_mod <- dat_mod |>
+    mutate(comname = ifelse(comname == "lanternfish (unclassified)", "lanternfish", comname))   
+
 # Some final naming/tidying
 dat_mod <- dat_mod |>
     rename(functional_group = soe_24) |>
@@ -134,6 +138,15 @@ mod_brms # There are still a few divergent transitions that I wasn't able to get
 
 pp_check(mod_brms, ndraws = 100) # seems reasonable to me!
 shinystan::launch_shinystan(mod_brms) # This will launch a GUI to interrogate the model.
+
+# Model slopes
+fg_slopes <- mod_brms |>
+    spread_draws(r_functional_group[fg, param]) |>
+    filter(param == "year.cont") |>
+    mutate(pct_change = (exp(r_functional_group) - 1) * 100) |>
+    group_by(fg) |>
+    median_qi(pct_change, .width = c(0.75, 0.95))
+fg_slopes    
 
 # Model predictions ----
 formerge <- dat_mod |>
@@ -338,16 +351,18 @@ ggsave("Figures/FG_temporaltrends_WithLabels.png", out, width = 11, height = 11,
 
 # No species labels
 no_label_plot <- ggplot(nd, aes(x = year, y = ytilda)) +
-    geom_line(data = nd2, aes(x = year, y = ytilda, color = functional_group), linewidth = 1) +
-    geom_ribbon(data = nd2, aes(x = year, y = ytilda, ymin = .lower, ymax = .upper, fill = functional_group), alpha = 0.1) +
+    geom_line(aes(group = comname), color = "dark gray", show.legend = F, alpha = 0.5) +
+    geom_line(data = nd2, aes(x = year, y = ytilda, color = functional_group), linewidth = 1.5) +
+    geom_ribbon(data = nd2, aes(x = year, y = ytilda, ymin = .lower, ymax = .upper, fill = functional_group), alpha = 0.3) +
     scale_fill_manual(name = "Feeding guild", values = c("#8da0cb", "#66c2a5", "#fc8d62")) +
     scale_color_manual(name = "Feeding guild", values = c("#8da0cb", "#66c2a5", "#fc8d62" )) +
-    theme_bw(base_size = 18) +
+    theme_bw(base_size = 19) +
     labs(y = "Predicted distance between seasonal centroids (km)", x = "") +
     coord_cartesian(xlim = c(1970, 2025), clip = "off") + # 🔑 allows labels to go outside the panel
-    theme(plot.margin = margin(5.5, 50, 5.5, 5.5)) # 👈 adds right margin space
+    theme(plot.margin = margin(5.5, 50, 5.5, 5.5)) +
+    facet_wrap(~functional_group)  # 👈 adds right margin space
 no_label_plot
-ggsave("Figures/FG_temporaltrends_NoLabels.png", no_label_plot, width = 11, height = 11, dpi = )
+ggsave("Figures/FG_temporaltrends_NoLabels.png", no_label_plot, width = 18, height = 11, dpi = 350 )
 
 
 # This one I imagine going into the supplement, but it the same figure but faceted by species and includes the CI's for each species specific trend.
@@ -407,7 +422,7 @@ for (fg in unique(nd$functional_group)) {
     plot_list[[fg]] <- ggplot(nd_fg_full, aes(x = year, y = ytilda)) +
         geom_point(
             data = dat_mod_fg, aes(x = year, y = dist_km, color = functional_group),
-            size = 0.9, show.legend = FALSE, na.rm = TRUE
+            size = 0.75, show.legend = FALSE, na.rm = TRUE
         ) +
         geom_line(
             data = nd_fg_full %>% filter(!is.na(year) & !is.na(ytilda)),
@@ -415,12 +430,12 @@ for (fg in unique(nd$functional_group)) {
         ) +
         geom_ribbon(
             data = nd_fg_full %>% filter(!is.na(year) & !is.na(.lower) & !is.na(.upper)),
-            aes(ymin = .lower, ymax = .upper), alpha = 0.1, na.rm = TRUE
+            aes(ymin = .lower, ymax = .upper), alpha = 0.2, na.rm = TRUE
         ) +
         scale_color_manual(values = colors[i]) +
-        scale_x_continuous(breaks = seq(from = 1970, to = 2023, by = 10)) +
+        scale_x_continuous(breaks = seq(from = 1970, to = 2023, by = 20)) +
         ylim(c(0, 700)) +
-        facet_wrap(~comname, ncol = ncol) +
+        facet_wrap(~comname, ncol = 7) +
         labs(y = "Predicted distance between seasonal centroids (km)", x = "") +
         ggtitle(fg) +
         theme_minimal(base_size = 18) +
@@ -428,8 +443,13 @@ for (fg in unique(nd$functional_group)) {
     i <- i + 1
 }
 
-plot_list$Benthivore + plot_list$Piscivore + plot_list$Planktivore + plot_layout(guides = "collect", axes = "collect")
-ggsave("Figures/Species_temporaltrends.png", width = 25, height = 15, dpi = 300)
+plot_list$Benthivore / plot_list$Piscivore / plot_list$Planktivore + plot_layout(guides = "collect", axes = "collect")
+ggsave("Figures/Species_temporaltrends.png", width = 20, height = 25, dpi = 300)
+
+
+
+
+
 
 # ggplot(nd, aes(x = year, y = ytilda)) +
 #     geom_point(data = dat_mod, aes(x = year, y = dist_km, color = functional_group), size = 0.9, show.legend = F) +
@@ -483,8 +503,10 @@ ggsave("Figures/Species_coefplot.png")
 # Suppose you have avg spring-fall distances per species
 dat <- dat %>%
     mutate(
-        comname = str_to_sentence(comname)
+        comname = str_to_sentence(comname),
+        comname = ifelse(comname == "Lanternfish (unclassified)", "Lanternfish", comname)
     )
+
 avg_dist <- dat %>%
     group_by(comname) %>%
     summarize(mean_dist = mean(dist_km, na.rm = TRUE)) |>
@@ -500,7 +522,7 @@ out_table <- out_table %>%
     left_join(avg_dist)
 
 # Plot slopes + intervals with color = average distance
-cols <- c("#ece2f0", "#a6bddb", "#1c9099")
+cols <- c("#f8c4e0", "#c45a9e", "#7b1d5e")
 #cols<- c("#7f3c8d", "#11a579", "#e68310")
 out_table <- out_table %>%
     mutate(

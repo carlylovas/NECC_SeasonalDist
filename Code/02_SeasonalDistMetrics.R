@@ -86,3 +86,7 @@ na_check <- t |>
 na_check # Should show only one season per species-year combo
 
 write_rds(seasonal_dist_out, here("Data", "seasonal_dist_withnas.rds"))
+
+
+
+

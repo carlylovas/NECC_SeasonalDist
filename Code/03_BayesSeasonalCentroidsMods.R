@@ -12,7 +12,7 @@ library(plotly)
 library(ggrepel)
 
 # Set up and data prep ----
-fit_mod<- FALSE # Set to false if already done to avoid refitting
+fit_mod<- TRUE # Set to false if already done to avoid refitting
 
 # Load data with biomass weighted cog lat/lon ----
 dat <- readRDS(here::here("Data/seasonal_dist_withnas.rds")) # Generated in 02_SeasonalDistMetrics.R
@@ -44,7 +44,6 @@ table(soe_24$soe_24)
 # Check for missing
 unique(dat$comname)[!unique(dat$comname) %in% soe_24$comname]
 add <- data.frame(comname = c("lanternfish (unclassified)", "windowpane flounder"), soe_24 = c("planktivore", "benthivore"))
-#add <- data.frame(comname = c("windowpane flounder"), soe_24 = c("benthivore"))
 
 soe_24 <- bind_rows(soe_24, add)
 
@@ -53,6 +52,11 @@ dat_mod <- dat |>
     filter(!comname == "sea scallop") |>
     mutate(season = factor(season, levels = c("Fall", "Spring")))
 table(dat_mod$soe_24)
+
+# Fix lanternfish to remove "(unclassified)"
+dat_mod <- dat_mod |>
+    mutate(comname = ifelse(comname == "lanternfish (unclassified)", "lanternfish", comname))   
+
 
 # Some final naming/tidying
 dat_mod <- dat_mod |>
@@ -226,6 +230,36 @@ results_table <- dat_plot %>%
 
 # Save formatted table
 write_csv(results_table, here::here("Results/seasonal_centroid_results_formatted_nas.csv"))
+
+
+results_table<- read_csv(here::here("Results/seasonal_centroid_results_formatted_nas.csv")) |>
+  janitor::clean_names()
+
+results_table |>
+  group_by(functional_group) |>
+  summarise(
+    n = n(),
+    spring_mean = mean(as.numeric(str_extract(spring_mean_lci_uci, "^[^ ]+"))),
+    fall_mean   = mean(as.numeric(str_extract(fall_mean_lci_uci,   "^[^ ]+")))
+  )
+
+
+# Key summaries by group
+shift_summ<- results_table |>
+    group_by(`Shift Pattern`) |>
+    summarise(n = n())  
+
+shift_mech_summ<- results_table |>
+    ungroup() |>
+    summarise(.by = c(`Shift Pattern`, `Mechanism`), n = n())
+shift_mech_summ
+# Shifts by functional group with per group count forceAndCall() percentages
+shift_group_summ<- results_table |>
+    ungroup() |>
+    summarise(.by = c(`Shift Pattern`, `Functional Group`), n = n()) |>
+    group_by(`Functional Group`) |>
+    mutate(percent = n / sum(n) * 100)
+shift_group_summ
 
 ggplot(dat_plot, aes(x = fall_mean, y = spring_mean, color = Mechanism, shape = `Functional Group`)) +
     geom_hline(yintercept = 0, linetype = "dashed", color = "gray") +

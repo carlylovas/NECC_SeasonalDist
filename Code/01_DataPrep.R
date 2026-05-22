@@ -15,6 +15,8 @@ library(rnaturalearth)
 library(rnaturalearthhires)
 library(sf)
 
+sf_use_s2(FALSE)
+
 # Initial data cut off for tows
 cut<- 0.70 # Percent of tows to keep a species, 0.75 add cusk and lanternfish that are a problem
 
@@ -24,6 +26,19 @@ survdat <- readRDS(here::here("Data/survdat_lw.rds"))$survdat |>
 
 # Some clean up
 trawldat <- janitor::clean_names(survdat)
+
+# Keep tows only within EPUs
+# epus <- bind_rows(
+#     st_read(here::here("Data/individual_epus/GOM.geojson"), quiet = TRUE),
+#     st_read(here::here("Data/individual_epus/GB.geojson"), quiet = TRUE),
+#     st_read(here::here("Data/individual_epus/MAB.geojson"), quiet = TRUE)
+# )
+
+# trawldat <- st_as_sf(trawldat, coords = c("lon", "lat"), crs = 4326, remove = FALSE)
+# trawldat <- st_join(trawldat, epus, join = st_within)
+# trawldat <- st_drop_geometry(trawldat)
+# trawldat <- dplyr::filter(trawldat, !is.na(EPU))    
+
 
 # Add in species common name
 spp_classes <- readr::read_csv(here::here("Data/sppclass.csv"),
@@ -176,18 +191,106 @@ atlantic_provinces <- canada_provinces %>%
         "Newfoundland and Labrador", "Quebec", "Ontario"
     ))
 
-# --- Example sample points (replace with your own data) ---
+epu_label_df<- epus |>
+    st_centroid() |>
+    st_coordinates() |>
+    as.data.frame() |>
+    bind_cols(epus) |>
+    select(EPU, X, Y)
+
+# --- Extract shared boundary lines between EPU pairs ---
+gom <- epus |> filter(EPU == "GOM")
+gb  <- epus |> filter(EPU == "GB")
+mab <- epus |> filter(EPU == "MAB")
+
+# Get the full boundary of each EPU as a linestring
+boundary_mab <- st_boundary(mab) |> st_cast("LINESTRING")
+boundary_gb  <- st_boundary(gb)  |> st_cast("LINESTRING")
+
+# Crop MAB boundary:
+bbox_mab_crop <- st_bbox(c(
+  xmin = -71.5, xmax = -69.0,
+  ymin = 40.05,  ymax = 41.25
+), crs = 4326) |> st_as_sfc()
+
+line_mab_crop <- st_intersection(boundary_mab, bbox_mab_crop)
+
+# Quick check
+plot(st_geometry(mab), main = "MAB crop check")
+plot(line_mab_crop, col = "red", add = TRUE, lwd = 2)
+
+# --- Helper: connect endpoints with a straight line ---
+endpoints_to_line <- function(line_sf, connect = c("north_south", "east_west")) {
+  connect <- match.arg(connect)
+  
+  coords <- line_sf |>
+    st_collection_extract("LINESTRING") |>
+    st_coordinates()
+  coords <- coords[, 1:2]
+  
+  if (connect == "north_south") {
+    pt1 <- coords[which.max(coords[, 2]), ]  # furthest north
+    pt2 <- coords[which.min(coords[, 2]), ]  # furthest south
+  } else {
+    pt1 <- coords[which.min(coords[, 1]), ]  # furthest west
+    pt2 <- coords[which.max(coords[, 1]), ]  # furthest east
+  }
+  
+  ends <- rbind(pt1, pt2)
+  st_sfc(st_linestring(ends), crs = 4326)
+}
+
+line_mab_straight <- endpoints_to_line(line_mab_crop, connect = "north_south")
+
+# Quick check
+plot(st_geometry(mab), main = "MAB straight line check")
+plot(line_mab_straight, col = "red", add = TRUE, lwd = 2)
+
+# Crop GB boundary
+# running roughly parallel from ~71W to ~66W
+bbox_gb_crop <- st_bbox(c(
+  xmin = -70, xmax = -66,
+  ymin = 41.25,  ymax = 43
+), crs = 4326) |> st_as_sfc()
+
+line_gb_crop <- st_intersection(boundary_gb, bbox_gb_crop)
+
+line_gb_straight  <- endpoints_to_line(line_gb_crop,  connect = "east_west")
+
+line_gb_straight <- st_sfc(
+  st_linestring(matrix(c(
+    -70.0, 41.67,   # western anchor, keep as is
+    -66.0, 42.4    # eastern end, lifted to 42.25
+  ), ncol = 2, byrow = TRUE)),
+  crs = 4326
+)
+
+# Quick check
+plot(st_geometry(gb), main = "GB straight line check")
+plot(line_gb_straight, col = "red", add = TRUE, lwd = 2)
+
+# --- Combine for plotting ---
+dividers <- bind_rows(
+  st_sf(region = "MAB boundary", geometry = st_geometry(line_mab_straight)),
+  st_sf(region = "GB boundary",  geometry = st_geometry(line_gb_straight))
+)
+
+# --- Sample map ---
 dat_sf <- dat |>
     st_as_sf(coords = c("lon", "lat"), crs = 4326)
 
 # --- Plot ---
 map <- ggplot() +
     geom_sf(data = dat_sf, aes(color = season), pch = 21, size = 0.5, alpha = 0.25) +
+    geom_sf(data = dividers, color = "black", linewidth = 1) +
     geom_sf(data = northeast_states, fill = "grey90", color = "black", size = 0.3) +
     geom_sf(data = atlantic_provinces, fill = "grey85", color = "black", size = 0.3) +
+    geom_text(data = epu_label_df, aes(x = X+0.1, y = Y, label = EPU), size = 6, fontface = "bold") +
     coord_sf(xlim = c(-76, -65), ylim = c(35, 44.575)) +
     scale_color_manual(name = "Season", values = c("#d95f02", "#1b9e77")) +
-    theme_bw(base_size = 16) +
+    xlab("Latitude") +  
+    ylab("Longitude") +
+    theme_bw(base_size = 18) +
     theme(legend.position = "none") +
     facet_wrap(~season, ncol = 2)
 
@@ -197,9 +300,90 @@ ts <- ggplot(delta_year_day, aes(x = year)) +
     geom_line(aes(y = Fall, color = "Fall"), size = 1) +
     geom_point(aes(y = Fall, color = "Fall"), size = 2) +
     scale_color_manual(name = "Season", values = c("Spring" = "#1b9e77", "Fall" = "#d95f02")) +
-    labs(y = "Median Trawl Day of Year") +
-    theme_bw(base_size = 16)
+    labs(y = "Median\nTrawl Day of Year") +
+    theme_bw(base_size = 18)
 
-samp_map_out <- map / ts + plot_layout(ncol = 1, heights = c(2, 1), widths = c(2, 1))
+bottemp_ts <- trawldat |>
+    distinct(id, year, season, bottemp) |>
+    filter(!is.na(bottemp)) |>
+    group_by(year, season) |>
+    summarize(median_bottemp = median(bottemp, na.rm = TRUE), .groups = "drop")
+
+ts_temp <- ggplot(bottemp_ts, aes(x = year, y = median_bottemp, color = season)) +
+    geom_line(size = 1) +
+    geom_point(size = 2) +
+    scale_color_manual(name = "Season", values = c("Spring" = "#1b9e77", "Fall" = "#d95f02")) +
+    labs(y = "Median\nBottom Temp. (°C)", x = "") +
+    theme_bw(base_size = 18)
+
+samp_map_out <- map / ts / ts_temp + plot_layout(ncol = 1, heights = c(2, 1, 1))
 samp_map_out
-ggsave(here::here("Figures/SurveyMap_TrawlDayTimeseries.png"), samp_map_out, width = 11, height = 8, units = "in", dpi = 300)
+ggsave(here::here("Figures/SurveyMap_TrawlDayTimeseries.png"), samp_map_out, width = 11, height = 10, units = "in", dpi = 300)
+
+
+# Alternative mapping
+library(sf)
+library(tidyverse)
+library(rnaturalearth)
+library(rnaturalearthhires)
+
+# --- Extract and crop EPU boundary segments ---
+
+# Get the full boundary of each EPU as a linestring
+boundary_mab <- st_boundary(mab) |> st_cast("LINESTRING")
+boundary_gb  <- st_boundary(gb)  |> st_cast("LINESTRING")
+
+# Crop MAB boundary: keep only the segment starting at ~71W running 
+# south and east to ~69W (the northern/northeastern edge)
+bbox_mab_crop <- st_bbox(c(
+  xmin = -71.5, xmax = -69.0,
+  ymin = 40.25,  ymax = 41.5
+), crs = 4326) |> st_as_sfc()
+
+line_mab_crop <- st_intersection(boundary_mab, bbox_mab_crop)
+
+# Quick check
+plot(st_geometry(mab), main = "MAB crop check")
+plot(line_mab_crop, col = "red", add = TRUE, lwd = 2)
+
+# Crop GB boundary: keep only the southern high-latitude edge
+# running roughly parallel from ~71W to ~66W
+bbox_gb_crop <- st_bbox(c(
+  xmin = -71.5, xmax = -66.75,
+  ymin = 41.25,  ymax = 43
+), crs = 4326) |> st_as_sfc()
+
+line_gb_crop <- st_intersection(boundary_gb, bbox_gb_crop)
+
+plot(st_geometry(gb), main = "GB crop check")
+plot(line_gb_crop, col = "red", add = TRUE, lwd = 2)
+
+# --- Combine for plotting ---
+dividers <- bind_rows(
+  st_sf(region = "MAB boundary", geometry = st_geometry(line_mab_crop)),
+  st_sf(region = "GB boundary",  geometry = st_geometry(line_gb_crop))
+)
+
+
+# --- EPU label positions (adjust X/Y after inspecting map) ---
+epu_labels <- tibble(
+  EPU = c("Gulf of Maine", "Georges Bank", "Mid-Atlantic Bight"),
+  X   = c(-68.5, -67.0, -73.5),
+  Y   = c(43.2,  40.8,  38.5)
+)
+
+# --- Map ---
+map <- ggplot() +
+  geom_sf(data = dat_sf, aes(color = season), pch = 21, size = 0.5, alpha = 0.25) +
+  geom_sf(data = northeast_states,   fill = "grey90", color = "black", linewidth = 0.3) +
+  geom_sf(data = atlantic_provinces, fill = "grey85", color = "black", linewidth = 0.3) +
+  geom_sf(data = dividers, color = "black", linewidth = 1) +
+  geom_text(data = epu_labels, aes(x = X, y = Y, label = EPU),
+            size = 4, fontface = "bold", color = "grey30") +
+  coord_sf(xlim = c(-76, -65), ylim = c(35, 44.575)) +
+  scale_color_manual(name = "Season", values = c("#d95f02", "#1b9e77")) +
+  theme_bw(base_size = 18) +
+  theme(legend.position = "none") +
+  facet_wrap(~season, ncol = 2)
+
+map
